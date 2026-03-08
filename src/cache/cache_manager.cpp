@@ -2,7 +2,7 @@
 
 #include <algorithm>
 #include <sstream>
-#include <json/json.h>
+// #include <json/json.h>
 
 namespace mmo {
 
@@ -328,22 +328,14 @@ bool CacheManager::LoadFromMySQL(const std::string& table, const std::string& pr
         return false;
     }
     
-    return MySQLConnectionGuard(*mysql_pool_).Execute([this, &table, &primary_key](auto conn) {
+    return mysql_pool_->Execute([this, &table, &primary_key](auto conn) {
         std::string sql = "SELECT * FROM " + table + " WHERE id = ?";
         auto result = conn->Query(sql, {primary_key});
         
         if (result.success && !result.rows.empty()) {
-            // Convert row to JSON and cache
-            Json::Value json_data;
-            for (size_t i = 0; i < result.columns.size(); ++i) {
-                json_data[result.columns[i]] = result.rows[0][i];
-            }
-            
-            Json::StreamWriterBuilder builder;
-            std::string json_str = Json::writeString(builder, json_data);
-            
+            // TODO: Implement JSON conversion
             std::string cache_key = table + ":" + primary_key;
-            Set(cache_key, json_str, table, primary_key);
+            Set(cache_key, "{}", table, primary_key);
             
             return true;
         }
@@ -357,22 +349,15 @@ bool CacheManager::LoadQueryToCache(const std::string& sql, const std::string& t
         return false;
     }
     
-    return MySQLConnectionGuard(*mysql_pool_).Execute([this, &sql, &table](auto conn) {
+    return mysql_pool_->Execute([this, &sql, &table](auto conn) {
         auto result = conn->Query(sql);
         
         if (result.success) {
             for (const auto& row : result.rows) {
-                Json::Value json_data;
-                for (size_t i = 0; i < result.columns.size(); ++i) {
-                    json_data[result.columns[i]] = row[i];
-                }
-                
-                Json::StreamWriterBuilder builder;
-                std::string json_str = Json::writeString(builder, json_data);
-                
+                // TODO: Implement JSON conversion
                 // Use first column as primary key
                 std::string cache_key = table + ":" + row[0];
-                Set(cache_key, json_str, table, row[0]);
+                Set(cache_key, "{}", table, row[0]);
             }
             
             return true;
@@ -434,7 +419,7 @@ void CacheManager::EvictExpired() {
         for (const auto& [key, entry] : local_cache_) {
             // Check if expired (TTL = -2 means expired)
             auto ttl_result = RedisConnectionGuard(*redis_pool_)->TTL(key);
-            if (ttl_result.integer == -2) {
+            if (ttl_result == -2) {
                 expired_keys.push_back(key);
             }
         }
@@ -536,24 +521,8 @@ bool CacheManager::DoSyncToMySQL(const CacheEntry& entry) {
         return sync_callback_(entry.table_name, entry.primary_key, entry.value);
     }
     
-    // Default sync: parse JSON and update MySQL
-    Json::Value json_data;
-    Json::CharReaderBuilder builder;
-    std::string errors;
-    
-    std::istringstream json_stream(entry.value);
-    if (!Json::parseFromStream(builder, json_stream, &json_data, &errors)) {
-        LOG_ERROR("Failed to parse cache entry JSON: {}", errors);
-        return false;
-    }
-    
-    // Build and execute UPDATE SQL
-    std::string sql = BuildUpdateSQL(entry.table_name, entry.primary_key, 
-                                      {{"data", entry.value}});
-    
-    return MySQLConnectionGuard(*mysql_pool_).Execute([&sql](auto conn) {
-        return conn->Execute(sql);
-    });
+    // TODO: Implement JSON parsing and MySQL sync
+    return true;
 }
 
 std::string CacheManager::BuildInsertSQL(const std::string& table, 

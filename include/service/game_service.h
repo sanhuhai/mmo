@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "service/service_base.h"
+#include "player/player_manager.h"
 
 namespace mmo {
 

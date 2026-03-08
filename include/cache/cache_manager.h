@@ -13,6 +13,7 @@
 #include "cache/redis_pool.h"
 #include "db/mysql_pool.h"
 #include "utils/timer.h"
+#include <lua.hpp>
 
 namespace mmo {
 

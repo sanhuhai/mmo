@@ -38,6 +38,12 @@ if(ENABLE_MYSQL)
     list(APPEND DB_SOURCES
         db/mysql_connection.cpp
         db/mysql_pool.cpp
+        player/player_manager.cpp
+        player/weapon.cpp
+    )
+else()
+    list(APPEND DB_SOURCES
+        player/weapon.cpp
     )
 endif()
 

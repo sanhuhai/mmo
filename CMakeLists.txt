@@ -271,6 +271,13 @@ if(ENABLE_MYSQL)
     else()
         include_directories(${MySQL_INCLUDE_DIRS})
     endif()
+else()
+    message(STATUS "MySQL support disabled")
+    set(MySQL_FOUND FALSE)
+    set(MySQL_INCLUDE_DIR "")
+    set(MySQL_LIBRARY "")
+    set(MySQL_INCLUDE_DIRS "")
+    set(MySQL_LIBRARIES "")
 endif()
 
 # Redis
@@ -358,6 +365,17 @@ add_subdirectory(src)
 file(COPY ${CMAKE_SOURCE_DIR}/lua DESTINATION ${CMAKE_BINARY_DIR})
 if(ENABLE_PROTOBUF)
     file(COPY ${CMAKE_SOURCE_DIR}/proto DESTINATION ${CMAKE_BINARY_DIR})
+endif()
+
+# Copy libmysql.dll to executable directory
+if(ENABLE_MYSQL AND PLATFORM_WINDOWS)
+    if(EXISTS "${THIRD_PARTY_DIR}/mysql/lib/libmysql.dll")
+        file(COPY ${THIRD_PARTY_DIR}/mysql/lib/libmysql.dll DESTINATION ${CMAKE_BINARY_DIR}/bin/Release)
+        file(COPY ${THIRD_PARTY_DIR}/mysql/lib/libmysql.dll DESTINATION ${CMAKE_BINARY_DIR}/bin/Debug)
+        message(STATUS "Copied libmysql.dll to executable directories")
+    else()
+        message(WARNING "libmysql.dll not found in ${THIRD_PARTY_DIR}/mysql/lib")
+    endif()
 endif()
 
 # ==========================================

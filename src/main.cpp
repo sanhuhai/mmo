@@ -7,6 +7,12 @@
 #include "service/service_manager.h"
 #include "script/lua_engine.h"
 #include "script/lua_register.h"
+#include "player/player_manager.h"
+#include "player/weapon.h"
+
+#ifdef USE_MYSQL
+#include "db/mysql_pool.h"
+#endif
 
 #ifdef _WIN32
 #include <windows.h>
@@ -54,6 +60,8 @@ int main(int argc, char* argv[]) {
 
         mmo::Logger::Instance().Initialize("logs/server.log", mmo::LogLevel::Debug);
 
+
+
         mmo::LuaEngine lua_engine;
         if (!lua_engine.Initialize()) {
             LOG_ERROR("Failed to initialize Lua engine");
@@ -61,6 +69,28 @@ int main(int argc, char* argv[]) {
         }
 
         mmo::LuaRegister::RegisterAll(lua_engine);
+
+#ifdef USE_MYSQL
+        mmo::MySQLConfig mysql_config;
+        mysql_config.host = mmo::Config::Instance().Get("mysql.host", mmo::ConfigValue("localhost")).AsString();
+        mysql_config.port = mmo::Config::Instance().Get("mysql.port", mmo::ConfigValue("3306")).AsInt();
+        mysql_config.user = mmo::Config::Instance().Get("mysql.user", mmo::ConfigValue("root")).AsString();
+        mysql_config.password = mmo::Config::Instance().Get("mysql.password", mmo::ConfigValue("1234567890yy")).AsString();
+        mysql_config.database = mmo::Config::Instance().Get("mysql.database", mmo::ConfigValue("mmo_server")).AsString();
+        mysql_config.pool_size = mmo::Config::Instance().Get("mysql.pool_size", mmo::ConfigValue("10")).AsInt();
+
+        LOG_INFO("Initializing MySQL connection pool...");
+        if (!mmo::PlayerManager::Instance().Initialize(mysql_config)) {
+            LOG_ERROR("Failed to initialize PlayerManager");
+            return 1;
+        }
+
+        LOG_INFO("Initializing database tables...");
+        if (!mmo::PlayerManager::Instance().InitializeDatabaseTables()) {
+            LOG_ERROR("Failed to initialize database tables");
+            return 1;
+        }
+#endif
 
         lua_engine.SetScriptPath("lua");
 
@@ -112,6 +142,12 @@ int main(int argc, char* argv[]) {
         }
 
         lua_engine.Call("on_server_stop");
+
+#ifdef USE_MYSQL
+        mmo::PlayerManager::Instance().Shutdown();
+#endif
+
+    
 
         mmo::ServiceManager::Instance().Shutdown();
         lua_engine.Shutdown();

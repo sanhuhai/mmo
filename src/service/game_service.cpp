@@ -1,5 +1,6 @@
 #include "service/game_service.h"
 #include "script/lua_register.h"
+#include "player/player_manager.h"
 
 namespace mmo {
 
@@ -69,6 +70,40 @@ bool GameService::CreatePlayer(uint32_t player_id, uint32_t connection_id, const
     if (players_.find(player_id) != players_.end()) {
         return false;
     }
+
+#ifdef USE_MYSQL
+    if (!PlayerManager::Instance().LoadPlayerFromDatabase(player_id)) {
+        LOG_ERROR("Failed to load player {} from database, creating new player", player_id);
+        
+        auto player_info = std::make_shared<mmo::PlayerInfo>();
+        player_info->set_player_id(player_id);
+        player_info->set_name(name);
+        player_info->set_level(1);
+        player_info->set_exp(0);
+        player_info->set_hp(100);
+        player_info->set_max_hp(100);
+        player_info->set_mp(100);
+        player_info->set_max_mp(100);
+        
+        auto position = player_info->mutable_position();
+        position->set_x(0.0f);
+        position->set_y(0.0f);
+        position->set_z(0.0f);
+        
+        player_info->set_profession(0);
+        player_info->set_gender(0);
+        
+        if (!PlayerManager::Instance().SavePlayerToDatabase(player_id)) {
+            LOG_ERROR("Failed to save new player {} to database", player_id);
+            return false;
+        }
+    }
+    
+    if (!PlayerManager::Instance().SyncPlayerToLua(lua_engine_.GetState(), player_id)) {
+        LOG_ERROR("Failed to sync player {} to Lua", player_id);
+        return false;
+    }
+#endif
 
     auto player = std::make_unique<GamePlayerInfo>();
     player->player_id = player_id;
