@@ -4,6 +4,7 @@
 #include <memory>
 #include <functional>
 
+#include <lua.hpp>
 #include <google/protobuf/message.h>
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/dynamic_message.h>

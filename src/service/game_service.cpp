@@ -70,7 +70,7 @@ bool GameService::CreatePlayer(uint32_t player_id, uint32_t connection_id, const
         return false;
     }
 
-    auto player = std::make_unique<PlayerInfo>();
+    auto player = std::make_unique<GamePlayerInfo>();
     player->player_id = player_id;
     player->connection_id = connection_id;
     player->name = name;
@@ -97,7 +97,7 @@ void GameService::RemovePlayer(uint32_t player_id) {
     }
 }
 
-PlayerInfo* GameService::GetPlayer(uint32_t player_id) {
+GamePlayerInfo* GameService::GetPlayer(uint32_t player_id) {
     auto it = players_.find(player_id);
     if (it != players_.end()) {
         return it->second.get();
@@ -105,7 +105,7 @@ PlayerInfo* GameService::GetPlayer(uint32_t player_id) {
     return nullptr;
 }
 
-PlayerInfo* GameService::GetPlayerByConnection(uint32_t connection_id) {
+GamePlayerInfo* GameService::GetPlayerByConnection(uint32_t connection_id) {
     auto it = connection_to_player_.find(connection_id);
     if (it != connection_to_player_.end()) {
         return GetPlayer(it->second);
@@ -114,7 +114,7 @@ PlayerInfo* GameService::GetPlayerByConnection(uint32_t connection_id) {
 }
 
 void GameService::UpdatePlayerPosition(uint32_t player_id, float x, float y, float z) {
-    PlayerInfo* player = GetPlayer(player_id);
+    GamePlayerInfo* player = GetPlayer(player_id);
     if (player) {
         player->x = x;
         player->y = y;
@@ -123,14 +123,14 @@ void GameService::UpdatePlayerPosition(uint32_t player_id, float x, float y, flo
 }
 
 void GameService::UpdatePlayerHP(uint32_t player_id, int hp) {
-    PlayerInfo* player = GetPlayer(player_id);
+    GamePlayerInfo* player = GetPlayer(player_id);
     if (player) {
         player->hp = hp;
     }
 }
 
 void GameService::UpdatePlayerMP(uint32_t player_id, int mp) {
-    PlayerInfo* player = GetPlayer(player_id);
+    GamePlayerInfo* player = GetPlayer(player_id);
     if (player) {
         player->mp = mp;
     }

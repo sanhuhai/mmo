@@ -83,11 +83,11 @@ endif()
 # ==========================================
 option(ENABLE_ASIO_STANDALONE "Use standalone Asio" ON)
 option(ENABLE_SPDLOG "Use spdlog for logging" ON)
-option(ENABLE_PROTOBUF "Use Protocol Buffers" OFF)
+option(ENABLE_PROTOBUF "Use Protocol Buffers" ON)
 option(ENABLE_MYSQL "Use MySQL" ON)
-option(ENABLE_REDIS "Use Redis" OFF)
+option(ENABLE_REDIS "Use Redis" ON)
 option(BUILD_LUA_FROM_SOURCE "Build Lua from source" ON)
-option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(ENABLE_TESTS "Build tests" OFF)
 
 set(LUA_VERSION "5.4" CACHE STRING "Lua version to use")
@@ -150,20 +150,52 @@ endif()
 
 # Protocol Buffers
 if(ENABLE_PROTOBUF)
-    find_package(Protobuf QUIET)
-    if(Protobuf_FOUND)
-        message(STATUS "Found Protobuf: ${Protobuf_VERSION}")
-        include_directories(${Protobuf_INCLUDE_DIRS})
+    # Check for bundled protobuf in third_party
+    if(EXISTS "${THIRD_PARTY_DIR}/protobuf/cmake/CMakeLists.txt")
+        message(STATUS "Found bundled protobuf in third_party")
+        # Build protobuf from source
+        set(protobuf_BUILD_TESTS OFF CACHE BOOL "Build protobuf tests" FORCE)
+        set(protobuf_BUILD_EXAMPLES OFF CACHE BOOL "Build protobuf examples" FORCE)
+        set(protobuf_BUILD_SHARED_LIBS OFF CACHE BOOL "Build protobuf shared libraries" FORCE)
+        set(protobuf_MSVC_STATIC_RUNTIME OFF CACHE BOOL "Link static runtime libraries" FORCE)
         
-        file(GLOB PROTO_FILES ${PROTO_DIR}/*.proto)
-        if(PROTO_FILES)
-            protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
-            include_directories(${CMAKE_CURRENT_BINARY_DIR})
-            message(STATUS "Proto files: ${PROTO_FILES}")
-        endif()
+        add_subdirectory(${THIRD_PARTY_DIR}/protobuf/cmake ${CMAKE_BINARY_DIR}/protobuf_build)
+        
+        set(Protobuf_FOUND TRUE)
+        set(Protobuf_INCLUDE_DIRS ${THIRD_PARTY_DIR}/protobuf/src)
+        set(Protobuf_LIBRARIES libprotobuf)
+        set(Protobuf_PROTOC_EXECUTABLE protoc)
+        
+        include_directories(${Protobuf_INCLUDE_DIRS})
+        message(STATUS "Protobuf include: ${Protobuf_INCLUDE_DIRS}")
+        message(STATUS "Protobuf library: ${Protobuf_LIBRARIES}")
     else()
-        message(STATUS "Protobuf not found, proto support disabled")
-        set(ENABLE_PROTOBUF OFF)
+        find_package(Protobuf QUIET)
+        if(Protobuf_FOUND)
+            message(STATUS "Found system Protobuf: ${Protobuf_VERSION}")
+            include_directories(${Protobuf_INCLUDE_DIRS})
+        else()
+            message(STATUS "Protobuf not found, proto support disabled")
+            set(ENABLE_PROTOBUF OFF)
+        endif()
+    endif()
+    
+    if(ENABLE_PROTOBUF)
+        # Add proto module
+        add_subdirectory(proto)
+    endif()
+endif()
+
+# RapidJSON
+if(ENABLE_RAPIDJSON)
+    if(EXISTS "${THIRD_PARTY_DIR}/rapidjson/include/rapidjson/rapidjson.h")
+        set(RAPIDJSON_INCLUDE_DIR "${THIRD_PARTY_DIR}/rapidjson/include")
+        include_directories(${RAPIDJSON_INCLUDE_DIR})
+        message(STATUS "Found RapidJSON: ${RAPIDJSON_INCLUDE_DIR}")
+        message(STATUS "RapidJSON support enabled")
+    else()
+        message(STATUS "RapidJSON not found, JSON support disabled")
+        set(ENABLE_RAPIDJSON OFF)
     endif()
 endif()
 
@@ -231,10 +263,6 @@ if(ENABLE_MYSQL)
             set(MySQL_INCLUDE_DIRS ${MySQL_INCLUDE_DIR})
             set(MySQL_LIBRARIES ${MySQL_LIBRARY})
             include_directories(${MySQL_INCLUDE_DIRS})
-            # For bundled MySQL, also include parent directory for mysql/mysql.h style includes
-            if(EXISTS "${THIRD_PARTY_DIR}/mysql/include/mysql.h")
-                include_directories(${THIRD_PARTY_DIR}/mysql/include)
-            endif()
             message(STATUS "Found MySQL: ${MySQL_LIBRARIES}")
         else()
             message(STATUS "MySQL not found, database support disabled")
@@ -259,11 +287,63 @@ if(ENABLE_REDIS)
     elseif(PLATFORM_LINUX)
         # Linux: Use system hiredis library
         message(STATUS "Using system hiredis library for Linux...")
-        find_package(PkgConfig REQUIRED)
-        pkg_check_modules(HIREDIS REQUIRED hiredis)
-        include_directories(${HIREDIS_INCLUDE_DIRS})
-        message(STATUS "hiredis include: ${HIREDIS_INCLUDE_DIRS}")
-        message(STATUS "hiredis library: ${HIREDIS_LIBRARIES}")
+        find_package(PkgConfig QUIET)
+        if(PkgConfig_FOUND)
+            pkg_check_modules(HIREDIS QUIET hiredis)
+            if(HIREDIS_FOUND)
+                include_directories(${HIREDIS_INCLUDE_DIRS})
+                message(STATUS "hiredis include: ${HIREDIS_INCLUDE_DIRS}")
+                message(STATUS "hiredis library: ${HIREDIS_LIBRARIES}")
+            else()
+                message(STATUS "hiredis not found via pkg-config, trying to find manually...")
+                find_path(HIREDIS_INCLUDE_DIR hiredis/hiredis.h
+                    PATHS
+                        /usr/include
+                        /usr/local/include
+                )
+                find_library(HIREDIS_LIBRARY hiredis
+                    PATHS
+                        /usr/lib
+                        /usr/local/lib
+                        /usr/lib/x86_64-linux-gnu
+                )
+                if(HIREDIS_INCLUDE_DIR AND HIREDIS_LIBRARY)
+                    set(HIREDIS_FOUND TRUE)
+                    set(HIREDIS_INCLUDE_DIRS ${HIREDIS_INCLUDE_DIR})
+                    set(HIREDIS_LIBRARIES ${HIREDIS_LIBRARY})
+                    include_directories(${HIREDIS_INCLUDE_DIRS})
+                    message(STATUS "hiredis include: ${HIREDIS_INCLUDE_DIRS}")
+                    message(STATUS "hiredis library: ${HIREDIS_LIBRARIES}")
+                else()
+                    message(STATUS "hiredis not found, Redis support disabled")
+                    set(ENABLE_REDIS OFF)
+                endif()
+            endif()
+        else()
+            message(STATUS "pkg-config not found, trying to find hiredis manually...")
+            find_path(HIREDIS_INCLUDE_DIR hiredis/hiredis.h
+                PATHS
+                    /usr/include
+                    /usr/local/include
+            )
+            find_library(HIREDIS_LIBRARY hiredis
+                PATHS
+                    /usr/lib
+                    /usr/local/lib
+                    /usr/lib/x86_64-linux-gnu
+            )
+            if(HIREDIS_INCLUDE_DIR AND HIREDIS_LIBRARY)
+                set(HIREDIS_FOUND TRUE)
+                set(HIREDIS_INCLUDE_DIRS ${HIREDIS_INCLUDE_DIR})
+                set(HIREDIS_LIBRARIES ${HIREDIS_LIBRARY})
+                include_directories(${HIREDIS_INCLUDE_DIRS})
+                message(STATUS "hiredis include: ${HIREDIS_INCLUDE_DIRS}")
+                message(STATUS "hiredis library: ${HIREDIS_LIBRARIES}")
+            else()
+                message(STATUS "hiredis not found, Redis support disabled")
+                set(ENABLE_REDIS OFF)
+            endif()
+        endif()
     endif()
 endif()
 

@@ -122,31 +122,31 @@ bool LuaProtobuf::LuaTableToMessage(luabridge::LuaRef table, google::protobuf::M
                     
                     switch (field->cpp_type()) {
                         case google::protobuf::FieldDescriptor::CPPTYPE_INT32:
-                            reflection->AddInt32(message, field, item.cast<int32_t>());
+                            reflection->AddInt32(message, field, static_cast<int32_t>(item));
                             break;
                         case google::protobuf::FieldDescriptor::CPPTYPE_INT64:
-                            reflection->AddInt64(message, field, item.cast<int64_t>());
+                            reflection->AddInt64(message, field, static_cast<int64_t>(item));
                             break;
                         case google::protobuf::FieldDescriptor::CPPTYPE_UINT32:
-                            reflection->AddUInt32(message, field, item.cast<uint32_t>());
+                            reflection->AddUInt32(message, field, static_cast<uint32_t>(item));
                             break;
                         case google::protobuf::FieldDescriptor::CPPTYPE_UINT64:
-                            reflection->AddUInt64(message, field, item.cast<uint64_t>());
+                            reflection->AddUInt64(message, field, static_cast<uint64_t>(item));
                             break;
                         case google::protobuf::FieldDescriptor::CPPTYPE_DOUBLE:
-                            reflection->AddDouble(message, field, item.cast<double>());
+                            reflection->AddDouble(message, field, static_cast<double>(item));
                             break;
                         case google::protobuf::FieldDescriptor::CPPTYPE_FLOAT:
-                            reflection->AddFloat(message, field, item.cast<float>());
+                            reflection->AddFloat(message, field, static_cast<float>(item));
                             break;
                         case google::protobuf::FieldDescriptor::CPPTYPE_BOOL:
-                            reflection->AddBool(message, field, item.cast<bool>());
+                            reflection->AddBool(message, field, static_cast<bool>(item));
                             break;
                         case google::protobuf::FieldDescriptor::CPPTYPE_ENUM:
-                            reflection->AddEnumValue(message, field, item.cast<int>());
+                            reflection->AddEnumValue(message, field, static_cast<int>(item));
                             break;
                         case google::protobuf::FieldDescriptor::CPPTYPE_STRING:
-                            reflection->AddString(message, field, item.cast<std::string>());
+                            reflection->AddString(message, field, item.tostring().c_str());
                             break;
                         case google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE: {
                             google::protobuf::Message* sub_message = reflection->AddMessage(message, field);
@@ -160,31 +160,31 @@ bool LuaProtobuf::LuaTableToMessage(luabridge::LuaRef table, google::protobuf::M
             } else {
                 switch (field->cpp_type()) {
                     case google::protobuf::FieldDescriptor::CPPTYPE_INT32:
-                        reflection->SetInt32(message, field, value.cast<int32_t>());
+                        reflection->SetInt32(message, field, static_cast<int32_t>(value));
                         break;
                     case google::protobuf::FieldDescriptor::CPPTYPE_INT64:
-                        reflection->SetInt64(message, field, value.cast<int64_t>());
+                        reflection->SetInt64(message, field, static_cast<int64_t>(value));
                         break;
                     case google::protobuf::FieldDescriptor::CPPTYPE_UINT32:
-                        reflection->SetUInt32(message, field, value.cast<uint32_t>());
+                        reflection->SetUInt32(message, field, static_cast<uint32_t>(value));
                         break;
                     case google::protobuf::FieldDescriptor::CPPTYPE_UINT64:
-                        reflection->SetUInt64(message, field, value.cast<uint64_t>());
+                        reflection->SetUInt64(message, field, static_cast<uint64_t>(value));
                         break;
                     case google::protobuf::FieldDescriptor::CPPTYPE_DOUBLE:
-                        reflection->SetDouble(message, field, value.cast<double>());
+                        reflection->SetDouble(message, field, static_cast<double>(value));
                         break;
                     case google::protobuf::FieldDescriptor::CPPTYPE_FLOAT:
-                        reflection->SetFloat(message, field, value.cast<float>());
+                        reflection->SetFloat(message, field, static_cast<float>(value));
                         break;
                     case google::protobuf::FieldDescriptor::CPPTYPE_BOOL:
-                        reflection->SetBool(message, field, value.cast<bool>());
+                        reflection->SetBool(message, field, static_cast<bool>(value));
                         break;
                     case google::protobuf::FieldDescriptor::CPPTYPE_ENUM:
-                        reflection->SetEnumValue(message, field, value.cast<int>());
+                        reflection->SetEnumValue(message, field, static_cast<int>(value));
                         break;
                     case google::protobuf::FieldDescriptor::CPPTYPE_STRING:
-                        reflection->SetString(message, field, value.cast<std::string>());
+                        reflection->SetString(message, field, value.tostring().c_str());
                         break;
                     case google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE: {
                         google::protobuf::Message* sub_message = reflection->MutableMessage(message, field);
@@ -231,14 +231,14 @@ void LuaProtobuf::RegisterToLua() {
                 if (message) {
                     return self->MessageToLuaTable(*message);
                 }
-                return luabridge::LuaRef(lua_state_);
+                return luabridge::LuaRef(self->lua_state_);
             })
             .addFunction("message_to_table", [self](const std::string& message_name, const std::string& data) -> luabridge::LuaRef {
                 auto message = self->ParseFromString(message_name, data);
                 if (message) {
                     return self->MessageToLuaTable(*message);
                 }
-                return luabridge::LuaRef(lua_state_);
+                return luabridge::LuaRef(self->lua_state_);
             })
             .addFunction("table_to_message", [self](const std::string& message_name, luabridge::LuaRef table) -> std::string {
                 auto message = self->CreateMessage(message_name);

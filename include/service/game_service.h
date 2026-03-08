@@ -7,7 +7,7 @@
 
 namespace mmo {
 
-struct PlayerInfo {
+struct GamePlayerInfo {
     uint32_t player_id;
     uint32_t connection_id;
     std::string name;
@@ -28,8 +28,8 @@ public:
 
     bool CreatePlayer(uint32_t player_id, uint32_t connection_id, const std::string& name);
     void RemovePlayer(uint32_t player_id);
-    PlayerInfo* GetPlayer(uint32_t player_id);
-    PlayerInfo* GetPlayerByConnection(uint32_t connection_id);
+    GamePlayerInfo* GetPlayer(uint32_t player_id);
+    GamePlayerInfo* GetPlayerByConnection(uint32_t connection_id);
 
     void UpdatePlayerPosition(uint32_t player_id, float x, float y, float z);
     void UpdatePlayerHP(uint32_t player_id, int hp);
@@ -40,7 +40,7 @@ public:
 private:
     void RegisterLuaFunctions();
 
-    std::unordered_map<uint32_t, std::unique_ptr<PlayerInfo>> players_;
+    std::unordered_map<uint32_t, std::unique_ptr<GamePlayerInfo>> players_;
     std::unordered_map<uint32_t, uint32_t> connection_to_player_;
 };
 

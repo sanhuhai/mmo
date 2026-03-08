@@ -10,7 +10,11 @@
 #include <google/protobuf/descriptor.h>
 
 #include "core/logger.h"
-#include "proto/game.pb.h"
+#include "common.pb.h"
+#include "game.pb.h"
+#include "login.pb.h"
+#include "player.pb.h"
+#include "chat.pb.h"
 
 namespace mmo {
 

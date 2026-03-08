@@ -26,6 +26,13 @@ set(UTILS_SOURCES
     utils/buffer.cpp
 )
 
+set(JSON_SOURCES)
+if(ENABLE_RAPIDJSON)
+    list(APPEND JSON_SOURCES
+        utils/json_utils.cpp
+    )
+endif()
+
 set(DB_SOURCES)
 if(ENABLE_MYSQL)
     list(APPEND DB_SOURCES
@@ -62,11 +69,12 @@ set(ALL_SOURCES
     ${DB_SOURCES}
     ${CACHE_SOURCES}
     ${PROTO_SOURCES}
+    ${JSON_SOURCES}
 )
 
-if(ENABLE_PROTOBUF)
-    list(APPEND ALL_SOURCES ${PROTO_SRCS})
-endif()
+# if(ENABLE_PROTOBUF)
+#     list(APPEND ALL_SOURCES ${PROTO_SRCS})
+# endif()
 
 add_library(mmo_core STATIC ${ALL_SOURCES})
 
@@ -77,6 +85,7 @@ target_include_directories(mmo_core PUBLIC
 
 target_link_libraries(mmo_core PUBLIC
     ${LUA_LIBRARIES}
+    lua_shared
     Threads::Threads
 )
 
@@ -86,8 +95,9 @@ if(ENABLE_SPDLOG AND spdlog_FOUND)
 endif()
 
 if(ENABLE_PROTOBUF AND Protobuf_FOUND)
-    target_link_libraries(mmo_core PUBLIC ${Protobuf_LIBRARIES})
+    target_link_libraries(mmo_core PUBLIC ${Protobuf_LIBRARIES} proto_module)
     target_compile_definitions(mmo_core PUBLIC USE_PROTOBUF)
+    target_include_directories(mmo_core PUBLIC ${PROTO_DIR})
 endif()
 
 if(ENABLE_MYSQL AND MySQL_FOUND)
@@ -103,6 +113,10 @@ if(ENABLE_REDIS)
     if(WIN32)
         target_link_libraries(mmo_core PUBLIC ws2_32)
     endif()
+endif()
+
+if(ENABLE_RAPIDJSON)
+    target_compile_definitions(mmo_core PUBLIC USE_RAPIDJSON)
 endif()
 
 add_executable(mmo_server main.cpp)
