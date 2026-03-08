@@ -29,7 +29,7 @@ public:
 
     virtual bool Initialize() = 0;
     virtual void Update(int64_t delta_ms) = 0;
-    virtual void Shutdown() = 0;
+    virtual void Shutdown() {}
 
     void PushMessage(const ServiceMessage& msg);
     bool PopMessage(ServiceMessage& msg);

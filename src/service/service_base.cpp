@@ -1,4 +1,5 @@
 #include "service/service_base.h"
+#include "service/service_manager.h"
 
 namespace mmo {
 
@@ -39,7 +40,6 @@ void ServiceBase::Send(uint32_t destination, uint32_t type, const std::vector<ui
     msg.type = type;
     msg.data = data;
     
-    extern void DispatchServiceMessage(const ServiceMessage&);
     DispatchServiceMessage(msg);
 }
 
