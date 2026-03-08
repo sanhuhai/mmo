@@ -1,6 +1,10 @@
 #include "script/lua_register.h"
 #include "player/weapon.h"
 
+#ifdef USE_MYSQL
+#include "player/player_manager.h"
+#endif
+
 // Forward declaration for protobuf Lua registration
 extern void RegisterProtoToLua(lua_State* L);
 
@@ -73,6 +77,36 @@ void LuaRegister::RegisterService(LuaEngine& engine) {
                 })
             .endNamespace()
         .endNamespace();
+    
+    // Register player system
+    #ifdef USE_MYSQL
+        luabridge::getGlobalNamespace(L)
+            .beginNamespace("mmo")
+                .beginNamespace("player")
+                    .addFunction("load_all_players_from_database", []() {
+                        return mmo::PlayerManager::Instance().LoadAllPlayersFromDatabase();
+                    })
+                    .addFunction("load_player_from_database", [](uint64_t player_id) {
+                        return mmo::PlayerManager::Instance().LoadPlayerFromDatabase(player_id);
+                    })
+                    .addFunction("save_player_to_database", [](uint64_t player_id) {
+                        return mmo::PlayerManager::Instance().SavePlayerToDatabase(player_id);
+                    })
+                    .addFunction("sync_all_players_to_lua", [L]() {
+                        return mmo::PlayerManager::Instance().SyncAllPlayersToLua(L);
+                    })
+                    .addFunction("sync_player_to_lua", [L](uint64_t player_id) {
+                        return mmo::PlayerManager::Instance().SyncPlayerToLua(L, player_id);
+                    })
+                    .addFunction("get_player_count", []() {
+                        return mmo::PlayerManager::Instance().GetPlayerCount();
+                    })
+                    .addFunction("remove_player_from_cache", [](uint64_t player_id) {
+                        return mmo::PlayerManager::Instance().RemovePlayerFromCache(player_id);
+                    })
+                .endNamespace()
+            .endNamespace();
+    #endif
     
     // Register Weapon class
     luabridge::getGlobalNamespace(L)
