@@ -1,0 +1,43 @@
+# Build directories
+build/
+bin/
+lib/
+out/
+
+# IDE
+.vscode/
+.idea/
+.vs/
+*.suo
+*.user
+*.sln.docstates
+
+# Compiled files
+*.obj
+*.o
+*.exe
+*.dll
+*.lib
+*.a
+*.so
+*.dylib
+
+# Logs
+logs/
+*.log
+
+# Config (keep template)
+config/local.ini
+
+# Third party (downloaded)
+third_party/LuaBridge/
+third_party/asio/
+third_party/spdlog/
+third_party/lua/
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
