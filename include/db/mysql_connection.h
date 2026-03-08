@@ -8,7 +8,7 @@
 #include <functional>
 #include <mutex>
 
-#include <mysql/mysql.h>
+#include <mysql.h>
 
 #include "core/logger.h"
 

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.5)
 project(mmo_server VERSION 1.0.0 LANGUAGES CXX C)
 
 # ==========================================
@@ -83,9 +83,9 @@ endif()
 # ==========================================
 option(ENABLE_ASIO_STANDALONE "Use standalone Asio" ON)
 option(ENABLE_SPDLOG "Use spdlog for logging" ON)
-option(ENABLE_PROTOBUF "Use Protocol Buffers" ON)
+option(ENABLE_PROTOBUF "Use Protocol Buffers" OFF)
 option(ENABLE_MYSQL "Use MySQL" ON)
-option(ENABLE_REDIS "Use Redis" ON)
+option(ENABLE_REDIS "Use Redis" OFF)
 option(BUILD_LUA_FROM_SOURCE "Build Lua from source" ON)
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 option(ENABLE_TESTS "Build tests" OFF)
@@ -171,14 +171,23 @@ endif()
 if(ENABLE_MYSQL)
     find_package(MySQL QUIET)
     if(NOT MySQL_FOUND)
+        # Check for bundled MySQL in third_party
+        if(EXISTS "${THIRD_PARTY_DIR}/mysql/include/mysql.h")
+            set(MySQL_INCLUDE_DIR "${THIRD_PARTY_DIR}/mysql/include")
+            set(MySQL_LIBRARY "${THIRD_PARTY_DIR}/mysql/lib/libmysql.lib")
+            message(STATUS "Found bundled MySQL in third_party")
+        endif()
+        
         # Windows paths
-        if(PLATFORM_WINDOWS)
+        if(PLATFORM_WINDOWS AND NOT MySQL_INCLUDE_DIR)
             find_path(MySQL_INCLUDE_DIR mysql/mysql.h
                 PATHS
-                    "$ENV{PROGRAMFILES}/MySQL/MySQL Server 8.0/include"
-                    "$ENV{PROGRAMFILES(x86)}/MySQL/MySQL Server 8.0/include"
                     "C:/Program Files/MySQL/MySQL Server 8.0/include"
                     "C:/Program Files (x86)/MySQL/MySQL Server 8.0/include"
+                    "C:/Program Files/MySQL/MySQL Server 8.4/include"
+                    "C:/Program Files (x86)/MySQL/MySQL Server 8.4/include"
+                    "C:/Program Files/MySQL/MySQL Server 5.7/include"
+                    "C:/Program Files (x86)/MySQL/MySQL Server 5.7/include"
                     "C:/mysql/include"
                 DOC "MySQL include directory"
             )
@@ -186,10 +195,12 @@ if(ENABLE_MYSQL)
             find_library(MySQL_LIBRARY
                 NAMES libmysql mysqlclient
                 PATHS
-                    "$ENV{PROGRAMFILES}/MySQL/MySQL Server 8.0/lib"
-                    "$ENV{PROGRAMFILES(x86)}/MySQL/MySQL Server 8.0/lib"
                     "C:/Program Files/MySQL/MySQL Server 8.0/lib"
                     "C:/Program Files (x86)/MySQL/MySQL Server 8.0/lib"
+                    "C:/Program Files/MySQL/MySQL Server 8.4/lib"
+                    "C:/Program Files (x86)/MySQL/MySQL Server 8.4/lib"
+                    "C:/Program Files/MySQL/MySQL Server 5.7/lib"
+                    "C:/Program Files (x86)/MySQL/MySQL Server 5.7/lib"
                     "C:/mysql/lib"
                 DOC "MySQL library"
             )
@@ -220,6 +231,10 @@ if(ENABLE_MYSQL)
             set(MySQL_INCLUDE_DIRS ${MySQL_INCLUDE_DIR})
             set(MySQL_LIBRARIES ${MySQL_LIBRARY})
             include_directories(${MySQL_INCLUDE_DIRS})
+            # For bundled MySQL, also include parent directory for mysql/mysql.h style includes
+            if(EXISTS "${THIRD_PARTY_DIR}/mysql/include/mysql.h")
+                include_directories(${THIRD_PARTY_DIR}/mysql/include)
+            endif()
             message(STATUS "Found MySQL: ${MySQL_LIBRARIES}")
         else()
             message(STATUS "MySQL not found, database support disabled")

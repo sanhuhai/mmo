@@ -1,5 +1,7 @@
 #include "db/mysql_connection.h"
 
+#include <cstring>
+
 #ifdef USE_MYSQL
 
 namespace mmo {
@@ -303,7 +305,7 @@ MySQLResult MySQLConnection::ExecuteQuery(MYSQL_STMT* stmt) {
     std::vector<MYSQL_BIND> binds(num_fields);
     std::vector<std::vector<char>> buffers(num_fields);
     std::vector<unsigned long> lengths(num_fields);
-    std::vector<my_bool> is_null(num_fields);
+    std::vector<char> is_null(num_fields);
 
     for (unsigned int i = 0; i < num_fields; ++i) {
         buffers[i].resize(1024);
@@ -312,7 +314,7 @@ MySQLResult MySQLConnection::ExecuteQuery(MYSQL_STMT* stmt) {
         binds[i].buffer = buffers[i].data();
         binds[i].buffer_length = buffers[i].size();
         binds[i].length = &lengths[i];
-        binds[i].is_null = &is_null[i];
+        binds[i].is_null = reinterpret_cast<bool*>(&is_null[i]);
     }
 
     if (mysql_stmt_bind_result(stmt, binds.data()) != 0) {

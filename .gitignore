@@ -42,3 +42,4 @@ Thumbs.db
 *.swo
 *~
 /build_windows
+/build_linux

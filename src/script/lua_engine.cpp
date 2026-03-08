@@ -1,6 +1,7 @@
 #include "script/lua_engine.h"
 
 #include <filesystem>
+#include <cstring>
 #include <sstream>
 
 namespace mmo {
