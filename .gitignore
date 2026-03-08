@@ -30,10 +30,10 @@ logs/
 config/local.ini
 
 # Third party (downloaded)
-third_party/LuaBridge/
-third_party/asio/
-third_party/spdlog/
-third_party/lua/
+# third_party/LuaBridge/
+# third_party/asio/
+# third_party/spdlog/
+# third_party/lua/
 
 # OS files
 .DS_Store
@@ -41,3 +41,4 @@ Thumbs.db
 *.swp
 *.swo
 *~
+/build_windows
