@@ -43,3 +43,4 @@ Thumbs.db
 *~
 /build_windows
 /build_linux
+/third_party/protobuf
