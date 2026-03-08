@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package mmo;
+
+import "common.proto";
+import "player.proto";
+
+enum MessageType {
+    // System
+    MSG_HEARTBEAT = 0;
+    MSG_ERROR = 1;
+    
+    // Login
+    MSG_LOGIN_REQUEST = 100;
+    MSG_LOGIN_RESPONSE = 101;
+    MSG_LOGOUT_REQUEST = 102;
+    MSG_LOGOUT_RESPONSE = 103;
+    MSG_REGISTER_REQUEST = 104;
+    MSG_REGISTER_RESPONSE = 105;
+    MSG_CREATE_ROLE_REQUEST = 106;
+    MSG_CREATE_ROLE_RESPONSE = 107;
+    
+    // Player
+    MSG_PLAYER_MOVE_REQUEST = 200;
+    MSG_PLAYER_MOVE_RESPONSE = 201;
+    MSG_PLAYER_MOVE_NOTIFY = 202;
+    MSG_PLAYER_ENTER_SCENE = 203;
+    MSG_PLAYER_LEAVE_SCENE = 204;
+    MSG_GET_PLAYER_INFO_REQUEST = 205;
+    MSG_GET_PLAYER_INFO_RESPONSE = 206;
+    MSG_UPDATE_PLAYER_INFO = 207;
+    
+    // Chat
+    MSG_SEND_CHAT_REQUEST = 300;
+    MSG_SEND_CHAT_RESPONSE = 301;
+    MSG_RECEIVE_CHAT = 302;
+    MSG_GET_CHAT_HISTORY_REQUEST = 303;
+    MSG_GET_CHAT_HISTORY_RESPONSE = 304;
+}
+
+message GameMessage {
+    MessageType type = 1;
+    uint64 sequence = 2;
+    uint64 timestamp = 3;
+    bytes payload = 4;
+}
+
+message ErrorResponse {
+    int32 error_code = 1;
+    string error_message = 2;
+}

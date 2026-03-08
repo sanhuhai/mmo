@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package mmo;
+
+import "common.proto";
+
+message PlayerInfo {
+    uint64 player_id = 1;
+    string name = 2;
+    int32 level = 3;
+    int64 exp = 4;
+    int32 hp = 5;
+    int32 max_hp = 6;
+    int32 mp = 7;
+    int32 max_mp = 8;
+    Vector3 position = 9;
+    Vector3 rotation = 10;
+    int32 profession = 11;
+    int32 gender = 12;
+}
+
+message PlayerAttribute {
+    int32 strength = 1;
+    int32 agility = 2;
+    int32 intelligence = 3;
+    int32 vitality = 4;
+    int32 attack = 5;
+    int32 defense = 6;
+    int32 magic_attack = 7;
+    int32 magic_defense = 8;
+    int32 hp = 9;
+    int32 mp = 10;
+    int32 move_speed = 11;
+    int32 attack_speed = 12;
+}
+
+message PlayerMoveRequest {
+    Vector3 target_position = 1;
+    Vector3 target_rotation = 2;
+    int32 move_type = 3;
+}
+
+message PlayerMoveResponse {
+    Result result = 1;
+    Vector3 position = 2;
+}
+
+message PlayerMoveNotify {
+    uint64 player_id = 1;
+    Vector3 position = 2;
+    Vector3 rotation = 3;
+    int32 move_type = 4;
+}
+
+message PlayerEnterSceneNotify {
+    PlayerInfo player = 1;
+    repeated PlayerInfo nearby_players = 2;
+}
+
+message PlayerLeaveSceneNotify {
+    uint64 player_id = 1;
+}
+
+message GetPlayerInfoRequest {
+    uint64 player_id = 1;
+}
+
+message GetPlayerInfoResponse {
+    Result result = 1;
+    PlayerInfo player = 2;
+}
+
+message UpdatePlayerInfoNotify {
+    PlayerInfo player = 1;
+}

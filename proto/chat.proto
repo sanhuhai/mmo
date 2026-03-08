@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package mmo;
+
+import "common.proto";
+
+enum ChatChannel {
+    CHANNEL_WORLD = 0;
+    CHANNEL_PRIVATE = 1;
+    CHANNEL_GUILD = 2;
+    CHANNEL_TEAM = 3;
+    CHANNEL_SYSTEM = 4;
+}
+
+message ChatMessage {
+    uint64 sender_id = 1;
+    string sender_name = 2;
+    ChatChannel channel = 3;
+    string content = 4;
+    int64 timestamp = 5;
+    uint64 target_id = 6;
+}
+
+message SendChatRequest {
+    ChatChannel channel = 1;
+    string content = 2;
+    uint64 target_id = 3;
+}
+
+message SendChatResponse {
+    Result result = 1;
+}
+
+message ReceiveChatNotify {
+    ChatMessage message = 1;
+}
+
+message GetChatHistoryRequest {
+    ChatChannel channel = 1;
+    int32 count = 2;
+}
+
+message GetChatHistoryResponse {
+    Result result = 1;
+    repeated ChatMessage messages = 2;
+}

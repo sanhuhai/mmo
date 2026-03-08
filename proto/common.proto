@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package mmo;
+
+option cc_enable_arenas = true;
+
+message Vector3 {
+    float x = 1;
+    float y = 2;
+    float z = 3;
+}
+
+message Result {
+    int32 code = 1;
+    string message = 2;
+}
+
+message Empty {
+}
+
+message Heartbeat {
+    int64 timestamp = 1;
+}

@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package mmo;
+
+import "common.proto";
+
+message LoginRequest {
+    string account = 1;
+    string password = 2;
+    string platform = 3;
+    string version = 4;
+    string device_id = 5;
+}
+
+message LoginResponse {
+    Result result = 1;
+    uint64 player_id = 2;
+    string token = 3;
+    string server_time = 4;
+}
+
+message LogoutRequest {
+    uint64 player_id = 1;
+}
+
+message LogoutResponse {
+    Result result = 1;
+}
+
+message RegisterRequest {
+    string account = 1;
+    string password = 2;
+    string nickname = 3;
+}
+
+message RegisterResponse {
+    Result result = 1;
+    uint64 player_id = 2;
+}
+
+message CreateRoleRequest {
+    string name = 1;
+    int32 profession = 2;
+    int32 gender = 3;
+}
+
+message CreateRoleResponse {
+    Result result = 1;
+    RoleInfo role = 2;
+}
+
+message RoleInfo {
+    uint64 player_id = 1;
+    string name = 2;
+    int32 profession = 3;
+    int32 gender = 4;
+    int32 level = 5;
+    int64 exp = 6;
+}

@@ -1,0 +1,189 @@
+#pragma once
+
+#include <memory>
+#include <array>
+#include <deque>
+#include <functional>
+#include <asio.hpp>
+
+#include "core/logger.h"
+
+namespace mmo {
+
+class Connection : public std::enable_shared_from_this<Connection> {
+public:
+    using Ptr = std::shared_ptr<Connection>;
+    using MessageHandler = std::function<void(Ptr, const std::vector<uint8_t>&)>;
+    using ErrorHandler = std::function<void(Ptr, const std::string&)>;
+
+    enum class State {
+        Disconnected,
+        Connecting,
+        Connected,
+        Closing
+    };
+
+    Connection(asio::io_context& io_context)
+        : socket_(io_context)
+        , state_(State::Disconnected)
+        , connection_id_(0) {
+    }
+
+    ~Connection() {
+        Close();
+    }
+
+    void SetConnectionId(uint32_t id) { connection_id_ = id; }
+    uint32_t GetConnectionId() const { return connection_id_; }
+
+    asio::ip::tcp::socket& GetSocket() { return socket_; }
+
+    void SetMessageHandler(MessageHandler handler) { message_handler_ = handler; }
+    void SetErrorHandler(ErrorHandler handler) { error_handler_ = handler; }
+
+    void Start() {
+        state_ = State::Connected;
+        LOG_DEBUG("Connection {} started", connection_id_);
+        AsyncReadHeader();
+    }
+
+    void Close() {
+        if (state_ == State::Disconnected) {
+            return;
+        }
+
+        state_ = State::Closing;
+        
+        asio::error_code ec;
+        socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
+        socket_.close(ec);
+        
+        state_ = State::Disconnected;
+        LOG_DEBUG("Connection {} closed", connection_id_);
+    }
+
+    void Send(const std::vector<uint8_t>& data) {
+        if (state_ != State::Connected) {
+            return;
+        }
+
+        auto self = shared_from_this();
+        asio::post(socket_.get_executor(), [this, self, data]() {
+            bool write_in_progress = !write_queue_.empty();
+            write_queue_.push_back(data);
+            
+            if (!write_in_progress) {
+                AsyncWrite();
+            }
+        });
+    }
+
+    void Send(const uint8_t* data, size_t size) {
+        std::vector<uint8_t> buffer(data, data + size);
+        Send(buffer);
+    }
+
+    State GetState() const { return state_; }
+    bool IsConnected() const { return state_ == State::Connected; }
+
+    std::string GetRemoteAddress() const {
+        asio::error_code ec;
+        auto endpoint = socket_.remote_endpoint(ec);
+        if (!ec) {
+            return endpoint.address().to_string() + ":" + std::to_string(endpoint.port());
+        }
+        return "";
+    }
+
+private:
+    void AsyncReadHeader() {
+        auto self = shared_from_this();
+        asio::async_read(socket_, asio::buffer(&read_size_, sizeof(read_size_)),
+            [this, self](asio::error_code ec, size_t bytes_transferred) {
+                if (ec) {
+                    HandleError(ec.message());
+                    return;
+                }
+
+                uint32_t body_size = ntohl(read_size_);
+                if (body_size > 1024 * 1024) {
+                    HandleError("Message too large");
+                    return;
+                }
+
+                AsyncReadBody(body_size);
+            });
+    }
+
+    void AsyncReadBody(uint32_t size) {
+        read_buffer_.resize(size);
+        
+        auto self = shared_from_this();
+        asio::async_read(socket_, asio::buffer(read_buffer_),
+            [this, self](asio::error_code ec, size_t bytes_transferred) {
+                if (ec) {
+                    HandleError(ec.message());
+                    return;
+                }
+
+                if (message_handler_) {
+                    message_handler_(shared_from_this(), read_buffer_);
+                }
+
+                AsyncReadHeader();
+            });
+    }
+
+    void AsyncWrite() {
+        if (write_queue_.empty()) {
+            return;
+        }
+
+        auto self = shared_from_this();
+        auto& data = write_queue_.front();
+        
+        write_size_ = htonl(static_cast<uint32_t>(data.size()));
+        
+        std::vector<asio::const_buffer> buffers;
+        buffers.push_back(asio::buffer(&write_size_, sizeof(write_size_)));
+        buffers.push_back(asio::buffer(data));
+
+        asio::async_write(socket_, buffers,
+            [this, self](asio::error_code ec, size_t bytes_transferred) {
+                if (ec) {
+                    HandleError(ec.message());
+                    return;
+                }
+
+                write_queue_.pop_front();
+                if (!write_queue_.empty()) {
+                    AsyncWrite();
+                }
+            });
+    }
+
+    void HandleError(const std::string& error) {
+        LOG_ERROR("Connection {} error: {}", connection_id_, error);
+        
+        if (error_handler_) {
+            error_handler_(shared_from_this(), error);
+        }
+        
+        Close();
+    }
+
+    asio::ip::tcp::socket socket_;
+    State state_;
+    uint32_t connection_id_;
+
+    uint32_t read_size_;
+    std::vector<uint8_t> read_buffer_;
+
+    uint32_t write_size_;
+    std::deque<std::vector<uint8_t>> write_queue_;
+
+    MessageHandler message_handler_;
+    ErrorHandler error_handler_;
+};
+
+}
