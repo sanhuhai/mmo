@@ -34,6 +34,48 @@ public:
     bool CallFunction(const std::string& name);
     bool CallFunction(const std::string& name, const std::vector<luabridge::LuaRef>& args);
 
+    // 支持模块名.方法名格式的调用
+    bool CallModuleFunction(const std::string& module_name, const std::string& function_name);
+    
+    template<typename... Args>
+    bool CallModule(const std::string& module_name, const std::string& function_name, Args&&... args) {
+        try {
+            luabridge::LuaRef module = GetModule(module_name);
+            if (module.isTable()) {
+                luabridge::LuaRef func = module[function_name];
+                if (func.isFunction()) {
+                    luabridge::LuaResult result = func(std::forward<Args>(args)...);
+                    return result.wasOk();
+                }
+            }
+        } catch (const luabridge::LuaException& e) {
+            LOG_ERROR("Lua module call error: {}", e.what());
+        }
+        return false;
+    }
+
+    template<typename Ret, typename... Args>
+    Ret CallModuleWithReturn(const std::string& module_name, const std::string& function_name, Args&&... args) {
+        try {
+            luabridge::LuaRef module = GetModule(module_name);
+            if (module.isTable()) {
+                luabridge::LuaRef func = module[function_name];
+                if (func.isFunction()) {
+                    luabridge::LuaResult result = func(std::forward<Args>(args)...);
+                    if (result.wasOk() && result.size() > 0) {
+                        return result[0].cast<Ret>().value();
+                    }
+                }
+            }
+        } catch (const luabridge::LuaException& e) {
+            LOG_ERROR("Lua module call error: {}", e.what());
+        }
+        return Ret();
+    }
+
+    luabridge::LuaRef GetModule(const std::string& module_name);
+    void RegisterModule(const std::string& module_name, const luabridge::LuaRef& module);
+
     template<typename... Args>
     bool Call(const std::string& name, Args&&... args) {
         try {

@@ -13,7 +13,8 @@ void LuaRegister::RegisterService(LuaEngine& engine) {
     #ifdef USE_PROTOBUF
         RegisterProtoToLua(engine.GetState());
     #endif
-    
+        const char* data = { "jfvhsekjfghg" };
+        LOG_WARN(data);
     auto L = engine.GetState();
     
     // 注册Weapon模块

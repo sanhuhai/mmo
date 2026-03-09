@@ -1,7 +1,9 @@
 -- Weapon management script
 require("socket.core")
 
-function on_server_start()
+local weapon_manager = {}
+
+function weapon_manager.on_server_start()
     print("=== Weapon System Test ===")
     
     -- Test 1: Generate random weapons
@@ -12,7 +14,7 @@ function on_server_start()
     local rare_weapon = Weapon.generate_random(30, Weapon.RARITY_RARE)
     local epic_weapon = Weapon.generate_random(50, Weapon.RARITY_EPIC)
     local legendary_weapon = Weapon.generate_random(70, Weapon.RARITY_LEGENDARY)
-    
+    print("Common weapon created: " )
     if common_weapon then
         print("Common weapon created: " .. common_weapon:get_name())
         print(common_weapon:to_string())
@@ -75,10 +77,8 @@ function on_server_start()
         if equipped_weapon then
             print("Equipped weapon: " .. equipped_weapon:get_name())
         end
-        
         print("Unequipping weapon from player " .. player_id)
         Weapon.unequip(player_id)
-        
         local unequipped_weapon = Weapon.get_equipped(player_id)
         if not unequipped_weapon then
             print("Weapon successfully unequipped")
@@ -114,13 +114,13 @@ function on_server_start()
     print("\n=== Weapon System Test Complete ===")
 end
 
-function on_server_stop()
+function weapon_manager.on_server_stop()
     print("Weapon system shutting down...")
     local weapon_count = Weapon.count()
     print("Weapons still in system: " .. weapon_count)
 end
 
-function create_weapon_for_player(player_id, level, rarity)
+function weapon_manager.create_weapon_for_player(player_id, level, rarity)
     local weapon = Weapon.generate_random(level, rarity)
     if weapon then
         Weapon.equip(player_id, weapon:get_id())
@@ -129,15 +129,15 @@ function create_weapon_for_player(player_id, level, rarity)
     return nil
 end
 
-function get_player_weapon(player_id)
+function weapon_manager.get_player_weapon(player_id)
     return Weapon.get_equipped(player_id)
 end
 
-function unequip_player_weapon(player_id)
+function weapon_manager.unequip_player_weapon(player_id)
     Weapon.unequip(player_id)
 end
 
-function print_weapon_info(weapon)
+function weapon_manager.print_weapon_info(weapon)
     if weapon then
         print(weapon:to_string())
     else
@@ -146,7 +146,7 @@ function print_weapon_info(weapon)
 end
 
 -- Test function for generating weapons of different types
-function test_weapon_types()
+function weapon_manager.test_weapon_types()
     print("\n=== Testing Weapon Types ===")
     
     local weapon_types = {
@@ -181,10 +181,12 @@ function test_weapon_types()
 end
 
 -- Export functions for use in other scripts
-return {
-    create_weapon_for_player = create_weapon_for_player,
-    get_player_weapon = get_player_weapon,
-    unequip_player_weapon = unequip_player_weapon,
-    print_weapon_info = print_weapon_info,
-    test_weapon_types = test_weapon_types
-}
+-- return {
+--     create_weapon_for_player = create_weapon_for_player,
+--     get_player_weapon = get_player_weapon,
+--     unequip_player_weapon = unequip_player_weapon,
+--     print_weapon_info = print_weapon_info,
+--     test_weapon_types = test_weapon_types
+-- }
+
+return weapon_manager

@@ -1,5 +1,5 @@
 #include "script/lua_engine.h"
-
+#include "script/lua_register.h"
 #include <filesystem>
 #include <cstring>
 #include <sstream>
@@ -32,6 +32,7 @@ bool LuaEngine::Initialize() {
     SetupPackagePath();
     RegisterStandardLibs();
     RegisterCustomLibs();
+    mmo::LuaRegister::RegisterAll(*this);
 
     LOG_INFO("Lua engine initialized (Lua {})", LUA_VERSION);
     return true;
@@ -100,6 +101,19 @@ bool LuaEngine::CallFunction(const std::string& name, const std::vector<luabridg
     return false;
 }
 
+bool LuaEngine::CallModuleFunction(const std::string& module_name, const std::string& function_name) {
+    return CallModule(module_name, function_name);
+}
+
+luabridge::LuaRef LuaEngine::GetModule(const std::string& module_name) {
+    return luabridge::getGlobal(lua_state_, module_name.c_str());
+}
+
+void LuaEngine::RegisterModule(const std::string& module_name, const luabridge::LuaRef& module) {
+    module.push(lua_state_);
+    lua_setglobal(lua_state_, module_name.c_str());
+}
+
 luabridge::LuaRef LuaEngine::GetGlobal(const std::string& name) {
     return luabridge::getGlobal(lua_state_, name.c_str());
 }
@@ -144,12 +158,34 @@ bool LuaEngine::LoadModule(const std::string& module_name) {
         filename = module_name;
     }
     
-    if (DoFile(filename)) {
-        loaded_modules_[module_name] = filename;
-        return true;
+    // åŠ è½½æ¨¡å—æ–‡ä»¶
+    int result = luaL_loadfile(lua_state_, filename.c_str());
+    if (result != LUA_OK) {
+        last_error_ = lua_tostring(lua_state_, -1);
+        LOG_ERROR("Lua loadfile error: {}", last_error_);
+        lua_pop(lua_state_, 1);
+        return false;
     }
     
-    return false;
+    // æ‰§è¡Œæ¨¡å—
+    result = lua_pcall(lua_state_, 0, 1, 0);
+    if (result != LUA_OK) {
+        last_error_ = lua_tostring(lua_state_, -1);
+        LOG_ERROR("Lua pcall error: {}", last_error_);
+        lua_pop(lua_state_, 1);
+        return false;
+    }
+    
+    // å¦‚æžœæ¨¡å—è¿”å›žäº†å€¼ï¼Œå°†å…¶æ³¨å†Œä¸ºå…¨å±€å˜é‡
+    if (!lua_isnil(lua_state_, -1)) {
+        lua_setglobal(lua_state_, module_name.c_str());
+    } else {
+        lua_pop(lua_state_, 1);
+    }
+    
+    loaded_modules_[module_name] = filename;
+    //loaded_modules_[module_name] = module_name;
+    return true;
 }
 
 void LuaEngine::ReloadModule(const std::string& module_name) {
@@ -162,20 +198,20 @@ void LuaEngine::ReloadModule(const std::string& module_name) {
 void LuaEngine::LoadAllMoudle() {
     std::string filename = {};
 	for (const auto& entry : std::filesystem::directory_iterator(script_path_)) {
-		// Ö»´¦ÀíÆÕÍ¨ÎÄ¼þ (ÅÅ³ý×ÓÄ¿Â¼)
+		// Ö»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¨ï¿½Ä¼ï¿½ (ï¿½Å³ï¿½ï¿½ï¿½Ä¿Â¼)
 		if (entry.is_regular_file()) {
 			
-			// Èç¹ûÐèÒªÍêÕûÂ·¾¶: entry.path().string()
+			// ï¿½ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½Â·ï¿½ï¿½: entry.path().string()
             filename = entry.path().filename().string();
             //filename.substr(0, filename.find('.'));
             if (filename.substr(filename.find('.') + 1) != "lua") {
                 continue;
             }
-            std::cout << "ÎÄ¼þÃû: " << entry.path().filename().string() << std::endl;
+            std::cout << "ï¿½Ä¼ï¿½ï¿½ï¿½: " << entry.path().filename().string() << std::endl;
             LoadModule(filename.substr(0, filename.find('.')));
 		}
 
-		// Èç¹ûÏë°üº¬×ÓÄ¿Â¼£¬È¥µôÉÏÃæµÄ if ÅÐ¶Ï¼´¿É
+		// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¿Â¼ï¿½ï¿½È¥ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ if ï¿½Ð¶Ï¼ï¿½ï¿½ï¿½
 		// else if (entry.is_directory()) { ... }
 	}
 }

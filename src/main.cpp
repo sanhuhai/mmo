@@ -97,6 +97,32 @@ int main(int argc, char* argv[]) {
         //lua_engine.LoadModule("main");
         lua_engine.LoadAllMoudle();
 
+        // 测试模块调用功能
+        LOG_INFO("Testing Lua module calls...");
+        
+        // 测试Weapon模块
+        bool weapon_test = lua_engine.CallModule("weapon_manager", "test_weapon_types");
+        LOG_INFO("Weapon module test: {}", weapon_test ? "SUCCESS" : "FAILED");
+        
+        // 测试Player模块
+        bool player_test = lua_engine.CallModule("player_manager", "load_all_players");
+        LOG_INFO("Player module test: {}", player_test ? "SUCCESS" : "FAILED");
+        
+        // 测试test_module模块
+        bool test_module_loaded = lua_engine.LoadModule("test_module");
+        if (test_module_loaded) {
+            // 测试带返回值的调用
+            std::string greeting = lua_engine.CallModuleWithReturn<std::string>("test_module", "hello", "World");
+            LOG_INFO("Test module hello: {}", greeting);
+            
+            int sum = lua_engine.CallModuleWithReturn<int>("test_module", "add", 10, 20);
+            LOG_INFO("Test module add: {}", sum);
+        }
+        
+        // 测试server模块
+        bool server_test = lua_engine.CallModule("server", "on_server_start");
+        LOG_INFO("Server module test: {}", server_test ? "SUCCESS" : "FAILED");
+
         /*if (!lua_engine.DoFile("../lua/main.lua")) {
             LOG_WARN("Main Lua script not found or has errors");
         }*/
@@ -110,7 +136,7 @@ int main(int argc, char* argv[]) {
         if (gate_service) {
             auto gate = std::dynamic_pointer_cast<mmo::GateService>(gate_service);
             if (gate) {
-                uint16_t port = mmo::Config::Instance().Get("gate.port", mmo::ConfigValue("8818")).AsInt();
+                uint16_t port = mmo::Config::Instance().Get("gate.port", mmo::ConfigValue("8888")).AsInt();
                 gate->SetPort(port);
             }
         }
@@ -120,8 +146,9 @@ int main(int argc, char* argv[]) {
         LOG_INFO("MMO Server started successfully");
         LOG_INFO("Services: {}", mmo::ServiceManager::Instance().GetServiceCount());
 
-        lua_engine.Call("on_server_start");
-        lua_engine.Call("load_all_players");
+        // 使用模块调用方式
+        server_test = lua_engine.CallModule("player_manager", "load_all_players");
+        LOG_INFO("Server module test: {}", server_test ? "SUCCESS" : "FAILED");
 
         auto start_time = std::chrono::steady_clock::now();
         auto last_update = start_time;
@@ -135,7 +162,7 @@ int main(int argc, char* argv[]) {
                 
                 mmo::ServiceManager::Instance().UpdateAll(delta.count());
                 
-                lua_engine.Call("on_update", delta.count());
+                lua_engine.CallModule("weapon_manager", "test_weapon_types");
             }
 
 #ifdef _WIN32
@@ -145,7 +172,8 @@ int main(int argc, char* argv[]) {
 #endif
         }
 
-        lua_engine.Call("on_server_stop");
+        // 使用模块调用方式
+        lua_engine.CallModule("server", "on_server_stop");
 
 #ifdef USE_MYSQL
         mmo::PlayerManager::Instance().Shutdown();
