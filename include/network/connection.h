@@ -97,20 +97,25 @@ public:
 private:
     void AsyncReadHeader() {
         auto self = shared_from_this();
-        asio::async_read(socket_, asio::buffer(&read_size_, sizeof(read_size_)),
+        asio::async_read(socket_, asio::buffer(header_buffer_),
             [this, self](asio::error_code ec, size_t bytes_transferred) {
                 if (ec) {
                     HandleError(ec.message());
                     return;
                 }
 
-                uint32_t body_size = ntohl(read_size_);
-                if (body_size > 1024 * 1024) {
+                uint32_t msg_id = 0;
+                uint32_t msg_len = 0;
+                std::memcpy(&msg_id, header_buffer_.data(), sizeof(uint32_t));
+                std::memcpy(&msg_len, header_buffer_.data() + sizeof(uint32_t), sizeof(uint32_t));
+
+                if (msg_len > 1024 * 1024) {
                     HandleError("Message too large");
                     return;
                 }
 
-                AsyncReadBody(body_size);
+                LOG_DEBUG("Received header: msg_id={}, msg_len={}", msg_id, msg_len);
+                AsyncReadBody(msg_len);
             });
     }
 
@@ -125,8 +130,13 @@ private:
                     return;
                 }
 
+                std::vector<uint8_t> full_message;
+                full_message.reserve(sizeof(uint32_t) * 2 + read_buffer_.size());
+                full_message.insert(full_message.end(), header_buffer_.begin(), header_buffer_.end());
+                full_message.insert(full_message.end(), read_buffer_.begin(), read_buffer_.end());
+
                 if (message_handler_) {
-                    message_handler_(shared_from_this(), read_buffer_);
+                    message_handler_(shared_from_this(), full_message);
                 }
 
                 AsyncReadHeader();
@@ -141,13 +151,7 @@ private:
         auto self = shared_from_this();
         auto& data = write_queue_.front();
         
-        write_size_ = htonl(static_cast<uint32_t>(data.size()));
-        
-        std::vector<asio::const_buffer> buffers;
-        buffers.push_back(asio::buffer(&write_size_, sizeof(write_size_)));
-        buffers.push_back(asio::buffer(data));
-
-        asio::async_write(socket_, buffers,
+        asio::async_write(socket_, asio::buffer(data),
             [this, self](asio::error_code ec, size_t bytes_transferred) {
                 if (ec) {
                     HandleError(ec.message());
@@ -175,12 +179,9 @@ private:
     State state_;
     uint32_t connection_id_;
 
-    uint32_t read_size_;
+    std::array<uint8_t, sizeof(uint32_t) * 2> header_buffer_;
     std::vector<uint8_t> read_buffer_;
-
-    uint32_t write_size_;
     std::deque<std::vector<uint8_t>> write_queue_;
-
     MessageHandler message_handler_;
     ErrorHandler error_handler_;
 };

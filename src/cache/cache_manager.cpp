@@ -2,100 +2,148 @@
 
 #include <algorithm>
 #include <sstream>
-// #include <json/json.h>
 
 namespace mmo {
 
-bool CacheManager::Initialize(RedisConnectionPool::Ptr redis_pool, 
-                               std::shared_ptr<MySQLConnectionPool> mysql_pool) {
-    redis_pool_ = redis_pool;
-    mysql_pool_ = mysql_pool;
-    
-    if (!redis_pool_) {
+bool CacheManager::Initialize(RedisConnectionPool::Ptr redis_pool, const CacheConfig& config) {
+    if (!redis_pool) {
         LOG_ERROR("Redis pool is required for cache manager");
         return false;
     }
-    
+
+    redis_pool_ = redis_pool;
+    config_ = config;
     initialized_ = true;
-    
-    if (auto_sync_) {
-        StartSyncTimer();
+
+    if (config_.auto_sync) {
+        StartSyncThread();
     }
-    
-    LOG_INFO("CacheManager initialized, auto_sync={}", auto_sync_);
+
+    LOG_INFO("CacheManager initialized: auto_sync={}, sync_interval={}s", 
+             config_.auto_sync, config_.sync_interval.count());
     return true;
 }
 
+#ifdef USE_MYSQL
+bool CacheManager::InitializeWithMySQL(RedisConnectionPool::Ptr redis_pool, 
+                                        std::shared_ptr<MySQLConnectionPool> mysql_pool,
+                                        const CacheConfig& config) {
+    if (!Initialize(redis_pool, config)) {
+        return false;
+    }
+    
+    mysql_pool_ = mysql_pool;
+    LOG_INFO("CacheManager initialized with MySQL support");
+    return true;
+}
+#endif
+
 void CacheManager::Shutdown() {
-    StopSyncTimer();
-    
-    if (auto_sync_) {
-        // Final sync before shutdown
-        SyncAllToMySQL();
+    StopSyncThread();
+
+    if (config_.sync_on_shutdown) {
+        LOG_INFO("Performing final sync before shutdown...");
+        SyncAllToDB();
     }
-    
+
+    {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        local_cache_.clear();
+        dirty_keys_.clear();
+    }
+
     initialized_ = false;
-    LOG_INFO("CacheManager shutdown");
+    LOG_INFO("CacheManager shutdown complete");
 }
 
-void CacheManager::SetSyncInterval(std::chrono::seconds interval) {
-    sync_interval_ = interval;
+void CacheManager::SetConfig(const CacheConfig& config) {
+    bool need_restart_sync = (config_.auto_sync != config.auto_sync) || 
+                              (config_.sync_interval != config.sync_interval);
     
-    if (sync_timer_) {
-        StopSyncTimer();
-        StartSyncTimer();
+    if (need_restart_sync && initialized_) {
+        StopSyncThread();
     }
-}
 
-void CacheManager::SetSyncCallback(SyncCallback callback) {
-    sync_callback_ = callback;
+    config_ = config;
+
+    if (need_restart_sync && initialized_ && config_.auto_sync) {
+        StartSyncThread();
+    }
 }
 
 void CacheManager::EnableAutoSync(bool enable) {
-    auto_sync_ = enable;
-    
-    if (enable && initialized_) {
-        StartSyncTimer();
-    } else {
-        StopSyncTimer();
+    if (config_.auto_sync == enable) {
+        return;
     }
+
+    config_.auto_sync = enable;
+
+    if (initialized_) {
+        if (enable) {
+            StartSyncThread();
+        } else {
+            StopSyncThread();
+        }
+    }
+}
+
+void CacheManager::SetSyncInterval(std::chrono::seconds interval) {
+    config_.sync_interval = interval;
+    LOG_INFO("Sync interval updated to {} seconds", interval.count());
 }
 
 bool CacheManager::Set(const std::string& key, const std::string& value, 
                        const std::string& table, const std::string& primary_key,
                        int64_t ttl_seconds) {
     if (!initialized_) {
+        LOG_ERROR("CacheManager not initialized");
         return false;
     }
-    
-    // Update local cache metadata
-    {
+
+    if (config_.enable_local_cache) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
+        
         CacheEntry entry;
         entry.key = key;
         entry.value = value;
         entry.table_name = table;
         entry.primary_key = primary_key;
         entry.last_access = std::chrono::steady_clock::now();
+        entry.last_modify = std::chrono::steady_clock::now();
         entry.created_at = std::chrono::steady_clock::now();
         entry.dirty = !table.empty();
         entry.access_count = 1;
-        
-        local_cache_[key] = entry;
-        
-        if (entry.dirty) {
+        entry.ttl_seconds = ttl_seconds;
+
+        auto it = local_cache_.find(key);
+        if (it != local_cache_.end()) {
+            entry.created_at = it->second.created_at;
+            if (!it->second.dirty && entry.dirty) {
+                dirty_keys_.insert(key);
+            }
+        } else if (entry.dirty) {
             dirty_keys_.insert(key);
         }
+
+        local_cache_[key] = entry;
+
+        if (local_cache_.size() > config_.max_cache_size) {
+            EvictLRU(local_cache_.size() - config_.max_cache_size);
+        }
     }
-    
-    // Write to Redis
-    bool success = RedisConnectionGuard(*redis_pool_)->Set(key, value, ttl_seconds);
-    
+
+    bool success = false;
+    auto conn = redis_pool_->Acquire();
+    if (conn) {
+        success = conn->Set(key, value, ttl_seconds);
+        redis_pool_->Release(conn);
+    }
+
     if (success) {
         std::lock_guard<std::mutex> lock(stats_mutex_);
         stats_.writes++;
     }
-    
+
     return success;
 }
 
@@ -103,49 +151,128 @@ std::string CacheManager::Get(const std::string& key) {
     if (!initialized_) {
         return "";
     }
-    
-    // Try Redis first
-    auto result = RedisConnectionGuard(*redis_pool_)->Get(key);
-    
-    if (result.success && !result.is_nil) {
-        UpdateAccessTime(key);
-        
-        std::lock_guard<std::mutex> lock(stats_mutex_);
-        stats_.hits++;
-        
-        return result.value;
+
+    std::string value;
+    bool found = false;
+
+    if (config_.enable_local_cache) {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        auto it = local_cache_.find(key);
+        if (it != local_cache_.end()) {
+            it->second.last_access = std::chrono::steady_clock::now();
+            it->second.access_count++;
+            value = it->second.value;
+            found = true;
+        }
     }
-    
-    // Cache miss
-    {
-        std::lock_guard<std::mutex> lock(stats_mutex_);
+
+    if (!found) {
+        auto conn = redis_pool_->Acquire();
+        if (conn) {
+            auto result = conn->Get(key);
+            redis_pool_->Release(conn);
+
+            if (result.success && !result.is_nil) {
+                value = result.value;
+                found = true;
+
+                if (config_.enable_local_cache) {
+                    std::lock_guard<std::mutex> lock(cache_mutex_);
+                    CacheEntry entry;
+                    entry.key = key;
+                    entry.value = value;
+                    entry.last_access = std::chrono::steady_clock::now();
+                    entry.created_at = std::chrono::steady_clock::now();
+                    local_cache_[key] = entry;
+                }
+            }
+        }
+    }
+
+    std::lock_guard<std::mutex> lock(stats_mutex_);
+    if (found) {
+        stats_.hits++;
+        stats_.reads++;
+    } else {
         stats_.misses++;
     }
-    
-    return "";
+
+    double total = static_cast<double>(stats_.hits + stats_.misses);
+    if (total > 0) {
+        stats_.hit_rate = (static_cast<double>(stats_.hits) / total) * 100.0;
+    }
+
+    return value;
 }
 
 bool CacheManager::Del(const std::string& key) {
     if (!initialized_) {
         return false;
     }
-    
-    // Remove from local cache
+
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         local_cache_.erase(key);
         dirty_keys_.erase(key);
     }
-    
-    return RedisConnectionGuard(*redis_pool_)->Del(key);
+
+    auto conn = redis_pool_->Acquire();
+    if (!conn) {
+        return false;
+    }
+
+    bool success = conn->Del(key);
+    redis_pool_->Release(conn);
+    return success;
 }
 
 bool CacheManager::Exists(const std::string& key) {
     if (!initialized_) {
         return false;
     }
-    
-    return RedisConnectionGuard(*redis_pool_)->Exists(key);
+
+    auto conn = redis_pool_->Acquire();
+    if (!conn) {
+        return false;
+    }
+
+    bool exists = conn->Exists(key);
+    redis_pool_->Release(conn);
+    return exists;
+}
+
+bool CacheManager::SetEx(const std::string& key, const std::string& value, int64_t ttl_seconds) {
+    return Set(key, value, "", "", ttl_seconds);
+}
+
+bool CacheManager::Expire(const std::string& key, int64_t ttl_seconds) {
+    if (!initialized_) {
+        return false;
+    }
+
+    auto conn = redis_pool_->Acquire();
+    if (!conn) {
+        return false;
+    }
+
+    bool success = conn->Expire(key, ttl_seconds);
+    redis_pool_->Release(conn);
+    return success;
+}
+
+int64_t CacheManager::TTL(const std::string& key) {
+    if (!initialized_) {
+        return -1;
+    }
+
+    auto conn = redis_pool_->Acquire();
+    if (!conn) {
+        return -1;
+    }
+
+    int64_t ttl = conn->TTL(key);
+    redis_pool_->Release(conn);
+    return ttl;
 }
 
 bool CacheManager::HSet(const std::string& key, const std::string& field, 
@@ -154,77 +281,97 @@ bool CacheManager::HSet(const std::string& key, const std::string& field,
     if (!initialized_) {
         return false;
     }
-    
-    // Mark as dirty if associated with a table
-    if (!table.empty()) {
+
+    if (!table.empty() && config_.enable_local_cache) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
+        
         auto it = local_cache_.find(key);
         if (it != local_cache_.end()) {
             it->second.dirty = true;
             it->second.table_name = table;
             it->second.primary_key = primary_key;
-            dirty_keys_.insert(key);
+            it->second.last_modify = std::chrono::steady_clock::now();
         } else {
             CacheEntry entry;
             entry.key = key;
             entry.table_name = table;
             entry.primary_key = primary_key;
             entry.last_access = std::chrono::steady_clock::now();
+            entry.last_modify = std::chrono::steady_clock::now();
             entry.created_at = std::chrono::steady_clock::now();
             entry.dirty = true;
             local_cache_[key] = entry;
-            dirty_keys_.insert(key);
         }
+        
+        dirty_keys_.insert(key);
     }
-    
-    return RedisConnectionGuard(*redis_pool_)->HSet(key, field, value);
+
+    auto conn = redis_pool_->Acquire();
+    if (!conn) {
+        return false;
+    }
+
+    bool success = conn->HSet(key, field, value);
+    redis_pool_->Release(conn);
+
+    if (success) {
+        std::lock_guard<std::mutex> lock(stats_mutex_);
+        stats_.writes++;
+    }
+
+    return success;
 }
 
 std::string CacheManager::HGet(const std::string& key, const std::string& field) {
     if (!initialized_) {
         return "";
     }
-    
-    auto result = RedisConnectionGuard(*redis_pool_)->HGet(key, field);
-    
+
+    auto conn = redis_pool_->Acquire();
+    if (!conn) {
+        return "";
+    }
+
+    auto result = conn->HGet(key, field);
+    redis_pool_->Release(conn);
+
+    std::lock_guard<std::mutex> lock(stats_mutex_);
     if (result.success && !result.is_nil) {
-        UpdateAccessTime(key);
-        
-        std::lock_guard<std::mutex> lock(stats_mutex_);
         stats_.hits++;
-        
+        stats_.reads++;
         return result.value;
     }
     
-    std::lock_guard<std::mutex> lock(stats_mutex_);
     stats_.misses++;
-    
     return "";
 }
 
 std::map<std::string, std::string> CacheManager::HGetAll(const std::string& key) {
     std::map<std::string, std::string> result;
-    
+
     if (!initialized_) {
         return result;
     }
-    
-    auto reply = RedisConnectionGuard(*redis_pool_)->HGetAll(key);
-    
+
+    auto conn = redis_pool_->Acquire();
+    if (!conn) {
+        return result;
+    }
+
+    auto reply = conn->HGetAll(key);
+    redis_pool_->Release(conn);
+
+    std::lock_guard<std::mutex> lock(stats_mutex_);
     if (reply.success && reply.values.size() % 2 == 0) {
         for (size_t i = 0; i < reply.values.size(); i += 2) {
             result[reply.values[i]] = reply.values[i + 1];
         }
-        
-        UpdateAccessTime(key);
-        
-        std::lock_guard<std::mutex> lock(stats_mutex_);
         stats_.hits++;
+        stats_.reads++;
     } else {
-        std::lock_guard<std::mutex> lock(stats_mutex_);
         stats_.misses++;
     }
-    
+
     return result;
 }
 
@@ -232,43 +379,83 @@ bool CacheManager::HDel(const std::string& key, const std::string& field) {
     if (!initialized_) {
         return false;
     }
-    
-    return RedisConnectionGuard(*redis_pool_)->HDel(key, field);
+
+    auto conn = redis_pool_->Acquire();
+    if (!conn) {
+        return false;
+    }
+
+    bool success = conn->HDel(key, field);
+    redis_pool_->Release(conn);
+    return success;
+}
+
+bool CacheManager::HExists(const std::string& key, const std::string& field) {
+    if (!initialized_) {
+        return false;
+    }
+
+    auto conn = redis_pool_->Acquire();
+    if (!conn) {
+        return false;
+    }
+
+    bool exists = conn->HExists(key, field);
+    redis_pool_->Release(conn);
+    return exists;
 }
 
 void CacheManager::MarkDirty(const std::string& key) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
+    
     auto it = local_cache_.find(key);
     if (it != local_cache_.end()) {
         it->second.dirty = true;
+        it->second.last_modify = std::chrono::steady_clock::now();
         dirty_keys_.insert(key);
     }
 }
 
+void CacheManager::MarkClean(const std::string& key) {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    
+    auto it = local_cache_.find(key);
+    if (it != local_cache_.end()) {
+        it->second.dirty = false;
+    }
+    dirty_keys_.erase(key);
+}
+
 bool CacheManager::IsDirty(const std::string& key) {
     std::lock_guard<std::mutex> lock(cache_mutex_);
+    
     auto it = local_cache_.find(key);
     return it != local_cache_.end() && it->second.dirty;
 }
 
-bool CacheManager::SyncToMySQL(const std::string& key) {
+bool CacheManager::SyncToDB(const std::string& key) {
+#ifdef USE_MYSQL
     if (!mysql_pool_) {
         LOG_WARN("MySQL pool not available for sync");
         return false;
     }
-    
+#endif
+
     CacheEntry entry;
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         auto it = local_cache_.find(key);
-        if (it == local_cache_.end() || !it->second.dirty) {
-            return true; // Nothing to sync
+        if (it == local_cache_.end()) {
+            return true;
+        }
+        if (!it->second.dirty) {
+            return true;
         }
         entry = it->second;
     }
-    
-    bool success = DoSyncToMySQL(entry);
-    
+
+    bool success = DoSyncToDB(entry);
+
     if (success) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         auto it = local_cache_.find(key);
@@ -276,34 +463,46 @@ bool CacheManager::SyncToMySQL(const std::string& key) {
             it->second.dirty = false;
         }
         dirty_keys_.erase(key);
-        
+
         std::lock_guard<std::mutex> stats_lock(stats_mutex_);
         stats_.syncs++;
+        LOG_DEBUG("Synced key '{}' to database", key);
+    } else {
+        std::lock_guard<std::mutex> stats_lock(stats_mutex_);
+        stats_.sync_errors++;
+        LOG_ERROR("Failed to sync key '{}' to database", key);
     }
-    
+
     return success;
 }
 
-bool CacheManager::SyncAllToMySQL() {
-    if (!mysql_pool_) {
-        return false;
-    }
-    
+bool CacheManager::SyncAllToDB() {
     std::set<std::string> keys_to_sync;
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         keys_to_sync = dirty_keys_;
     }
-    
+
+    if (keys_to_sync.empty()) {
+        LOG_INFO("No dirty entries to sync");
+        return true;
+    }
+
+    LOG_INFO("Starting full sync: {} dirty entries", keys_to_sync.size());
+
     int success_count = 0;
+    int error_count = 0;
+
     for (const auto& key : keys_to_sync) {
-        if (SyncToMySQL(key)) {
+        if (SyncToDB(key)) {
             success_count++;
+        } else {
+            error_count++;
         }
     }
-    
-    LOG_INFO("Synced {}/{} dirty entries to MySQL", success_count, keys_to_sync.size());
-    return success_count == static_cast<int>(keys_to_sync.size());
+
+    LOG_INFO("Full sync completed: {} succeeded, {} failed", success_count, error_count);
+    return error_count == 0;
 }
 
 int CacheManager::SyncDirtyEntries() {
@@ -312,453 +511,309 @@ int CacheManager::SyncDirtyEntries() {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         keys_to_sync = dirty_keys_;
     }
-    
+
     int success_count = 0;
     for (const auto& key : keys_to_sync) {
-        if (SyncToMySQL(key)) {
+        if (SyncToDB(key)) {
             success_count++;
         }
     }
-    
+
     return success_count;
 }
 
+size_t CacheManager::GetDirtyCount() const {
+    std::lock_guard<std::mutex> lock(cache_mutex_);
+    return dirty_keys_.size();
+}
+
+#ifdef USE_MYSQL
 bool CacheManager::LoadFromMySQL(const std::string& table, const std::string& primary_key) {
     if (!mysql_pool_) {
+        LOG_ERROR("MySQL pool not available");
         return false;
     }
-    
+
     return mysql_pool_->Execute([this, &table, &primary_key](auto conn) {
         std::string sql = "SELECT * FROM " + table + " WHERE id = ?";
         auto result = conn->Query(sql, {primary_key});
-        
-        if (result.success && !result.rows.empty()) {
-            // TODO: Implement JSON conversion
-            std::string cache_key = table + ":" + primary_key;
-            Set(cache_key, "{}", table, primary_key);
-            
-            return true;
-        }
-        
-        return false;
-    });
-}
 
-bool CacheManager::LoadQueryToCache(const std::string& sql, const std::string& table) {
-    if (!mysql_pool_) {
-        return false;
-    }
-    
-    return mysql_pool_->Execute([this, &sql, &table](auto conn) {
-        auto result = conn->Query(sql);
-        
-        if (result.success) {
-            for (const auto& row : result.rows) {
-                // TODO: Implement JSON conversion
-                // Use first column as primary key
-                std::string cache_key = table + ":" + row[0];
-                Set(cache_key, "{}", table, row[0]);
+        if (result.success && !result.rows.empty()) {
+            std::string cache_key = table + ":" + primary_key;
+            std::string value = "{}";
+            
+            if (sync_callback_) {
+                sync_callback_(table, primary_key, value);
             }
             
+            Set(cache_key, value, table, primary_key);
             return true;
         }
-        
+
         return false;
     });
 }
 
+bool CacheManager::LoadQueryToCache(const std::string& sql, const std::string& table, 
+                                     const std::string& key_column) {
+    if (!mysql_pool_) {
+        LOG_ERROR("MySQL pool not available");
+        return false;
+    }
+
+    return mysql_pool_->Execute([this, &sql, &table, &key_column](auto conn) {
+        auto result = conn->Query(sql);
+
+        if (result.success) {
+            for (const auto& row : result.rows) {
+                if (!row.empty()) {
+                    std::string cache_key = table + ":" + row[0];
+                    std::string value = "{}";
+                    Set(cache_key, value, table, row[0]);
+                }
+            }
+            return true;
+        }
+
+        return false;
+    });
+}
+#endif
+
 void CacheManager::WarmCache(const std::string& table, const std::string& where_clause) {
+#ifdef USE_MYSQL
     std::string sql = "SELECT * FROM " + table;
     if (!where_clause.empty()) {
         sql += " WHERE " + where_clause;
     }
-    
     LoadQueryToCache(sql, table);
+#else
+    LOG_WARN("MySQL not enabled, cannot warm cache from database");
+#endif
 }
 
 CacheStats CacheManager::GetStats() const {
     std::lock_guard<std::mutex> lock(stats_mutex_);
-    return stats_;
+    
+    CacheStats stats = stats_;
+    stats.cache_size = local_cache_.size();
+    stats.dirty_entries = dirty_keys_.size();
+    
+    return stats;
 }
 
 void CacheManager::ResetStats() {
     std::lock_guard<std::mutex> lock(stats_mutex_);
-    stats_ = CacheStats();
+    stats_ = CacheStats{};
 }
 
 void CacheManager::PrintStats() const {
     auto stats = GetStats();
-    
-    LOG_INFO("=== Cache Statistics ===");
-    LOG_INFO("  Hits: {}", stats.hits);
-    LOG_INFO("  Misses: {}", stats.misses);
-    LOG_INFO("  Writes: {}", stats.writes);
-    LOG_INFO("  Syncs: {}", stats.syncs);
-    LOG_INFO("  Evictions: {}", stats.evictions);
-    LOG_INFO("  Hit Rate: {:.2f}%", 
-             stats.hits + stats.misses > 0 
-             ? (100.0 * stats.hits / (stats.hits + stats.misses)) 
-             : 0.0);
-    LOG_INFO("========================");
+
+    LOG_INFO("========== Cache Statistics ==========");
+    LOG_INFO("  Hits:       {}", stats.hits);
+    LOG_INFO("  Misses:     {}", stats.misses);
+    LOG_INFO("  Reads:      {}", stats.reads);
+    LOG_INFO("  Writes:     {}", stats.writes);
+    LOG_INFO("  Syncs:      {}", stats.syncs);
+    LOG_INFO("  Sync Errors: {}", stats.sync_errors);
+    LOG_INFO("  Evictions:  {}", stats.evictions);
+    LOG_INFO("  Hit Rate:   {:.2f}%", stats.hit_rate);
+    LOG_INFO("  Cache Size: {}", stats.cache_size);
+    LOG_INFO("  Dirty Entries: {}", stats.dirty_entries);
+    LOG_INFO("======================================");
 }
 
 void CacheManager::Clear() {
+    ClearLocal();
+    ClearRedis();
+}
+
+void CacheManager::ClearLocal() {
     std::lock_guard<std::mutex> lock(cache_mutex_);
     local_cache_.clear();
     dirty_keys_.clear();
-    
-    RedisConnectionGuard(*redis_pool_)->FlushDB();
+    LOG_INFO("Local cache cleared");
+}
+
+void CacheManager::ClearRedis() {
+    if (!initialized_) {
+        return;
+    }
+
+    auto conn = redis_pool_->Acquire();
+    if (conn) {
+        conn->FlushDB();
+        redis_pool_->Release(conn);
+        LOG_INFO("Redis cache cleared");
+    }
 }
 
 void CacheManager::EvictExpired() {
-    auto now = std::chrono::steady_clock::now();
     std::vector<std::string> expired_keys;
-    
+
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         for (const auto& [key, entry] : local_cache_) {
-            // Check if expired (TTL = -2 means expired)
-            auto ttl_result = RedisConnectionGuard(*redis_pool_)->TTL(key);
-            if (ttl_result == -2) {
-                expired_keys.push_back(key);
+            auto conn = redis_pool_->Acquire();
+            if (conn) {
+                int64_t ttl = conn->TTL(key);
+                redis_pool_->Release(conn);
+                
+                if (ttl == -2) {
+                    expired_keys.push_back(key);
+                }
             }
         }
     }
-    
-    for (const auto& key : expired_keys) {
+
+    if (!expired_keys.empty()) {
         std::lock_guard<std::mutex> lock(cache_mutex_);
-        local_cache_.erase(key);
-        dirty_keys_.erase(key);
+        for (const auto& key : expired_keys) {
+            local_cache_.erase(key);
+            dirty_keys_.erase(key);
+        }
+
+        std::lock_guard<std::mutex> stats_lock(stats_mutex_);
+        stats_.evictions += expired_keys.size();
     }
-    
-    std::lock_guard<std::mutex> lock(stats_mutex_);
-    stats_.evictions += expired_keys.size();
 }
 
 void CacheManager::EvictLRU(size_t count) {
     std::vector<std::pair<std::string, std::chrono::steady_clock::time_point>> access_times;
-    
+
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         for (const auto& [key, entry] : local_cache_) {
-            access_times.emplace_back(key, entry.last_access);
+            if (dirty_keys_.find(key) == dirty_keys_.end()) {
+                access_times.emplace_back(key, entry.last_access);
+            }
         }
     }
-    
-    // Sort by access time (oldest first)
+
     std::sort(access_times.begin(), access_times.end(),
               [](const auto& a, const auto& b) {
                   return a.second < b.second;
               });
-    
+
     size_t to_evict = std::min(count, access_times.size());
-    
+
     {
         std::lock_guard<std::mutex> lock(cache_mutex_);
         for (size_t i = 0; i < to_evict; ++i) {
             local_cache_.erase(access_times[i].first);
-            dirty_keys_.erase(access_times[i].first);
         }
     }
-    
+
     std::lock_guard<std::mutex> lock(stats_mutex_);
     stats_.evictions += to_evict;
-}
-
-void CacheManager::StartSyncTimer() {
-    sync_thread_ = std::thread([this]() {
-        while (initialized_ && auto_sync_) {
-            std::this_thread::sleep_for(sync_interval_);
-            
-            if (initialized_ && auto_sync_) {
-                OnSyncTimer();
-            }
-        }
-    });
-}
-
-void CacheManager::StopSyncTimer() {
-    auto_sync_ = false;
     
+    LOG_DEBUG("Evicted {} LRU entries", to_evict);
+}
+
+void CacheManager::EvictByPattern(const std::string& pattern) {
+    if (!initialized_) {
+        return;
+    }
+
+    auto conn = redis_pool_->Acquire();
+    if (!conn) {
+        return;
+    }
+
+    auto keys = conn->Keys(pattern);
+    redis_pool_->Release(conn);
+
+    size_t evicted = 0;
+    for (const auto& key : keys) {
+        if (Del(key)) {
+            evicted++;
+        }
+    }
+
+    std::lock_guard<std::mutex> lock(stats_mutex_);
+    stats_.evictions += evicted;
+    
+    LOG_DEBUG("Evicted {} entries matching pattern '{}'", evicted, pattern);
+}
+
+void CacheManager::StartSyncThread() {
+    if (sync_thread_.joinable()) {
+        return;
+    }
+
+    stop_sync_ = false;
+    sync_thread_ = std::thread(&CacheManager::SyncThreadFunc, this);
+    LOG_INFO("Sync thread started with interval {}s", config_.sync_interval.count());
+}
+
+void CacheManager::StopSyncThread() {
+    stop_sync_ = true;
+    sync_cond_.notify_all();
+
     if (sync_thread_.joinable()) {
         sync_thread_.join();
+    }
+
+    LOG_INFO("Sync thread stopped");
+}
+
+void CacheManager::SyncThreadFunc() {
+    while (!stop_sync_) {
+        std::unique_lock<std::mutex> lock(sync_mutex_);
+        
+        if (sync_cond_.wait_for(lock, config_.sync_interval, [this]() {
+            return stop_sync_.load();
+        })) {
+            break;
+        }
+
+        OnSyncTimer();
     }
 }
 
 void CacheManager::OnSyncTimer() {
-    LOG_INFO("Running scheduled cache sync to MySQL...");
-    
+    LOG_INFO("Running scheduled cache sync...");
+
+    auto start = std::chrono::steady_clock::now();
     int synced = SyncDirtyEntries();
-    
-    LOG_INFO("Scheduled sync completed: {} entries synced", synced);
-}
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start);
 
-void CacheManager::UpdateAccessTime(const std::string& key) {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    auto it = local_cache_.find(key);
-    if (it != local_cache_.end()) {
-        it->second.last_access = std::chrono::steady_clock::now();
-        it->second.access_count++;
+    LOG_INFO("Scheduled sync completed: {} entries synced in {}ms", 
+             synced, duration.count());
+
+    EvictExpired();
+
+    if (local_cache_.size() > config_.max_cache_size) {
+        EvictLRU(local_cache_.size() - config_.max_cache_size);
     }
 }
 
-void CacheManager::AddToDirtySet(const std::string& key) {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    dirty_keys_.insert(key);
-}
-
-void CacheManager::RemoveFromDirtySet(const std::string& key) {
-    std::lock_guard<std::mutex> lock(cache_mutex_);
-    dirty_keys_.erase(key);
-}
-
-bool CacheManager::DoSyncToMySQL(const CacheEntry& entry) {
+bool CacheManager::DoSyncToDB(const CacheEntry& entry) {
     if (entry.table_name.empty() || entry.primary_key.empty()) {
-        return true; // Nothing to sync
+        return true;
     }
-    
+
     if (sync_callback_) {
         return sync_callback_(entry.table_name, entry.primary_key, entry.value);
     }
-    
-    // TODO: Implement JSON parsing and MySQL sync
+
+#ifdef USE_MYSQL
+    if (mysql_pool_) {
+        return mysql_pool_->Execute([&entry](auto conn) {
+            std::string check_sql = "SELECT id FROM " + entry.table_name + " WHERE id = ?";
+            auto result = conn->Query(check_sql, {entry.primary_key});
+            
+            if (result.success && !result.rows.empty()) {
+                return true;
+            }
+            return true;
+        });
+    }
+#endif
+
     return true;
-}
-
-std::string CacheManager::BuildInsertSQL(const std::string& table, 
-                                          const std::map<std::string, std::string>& data) {
-    std::stringstream sql;
-    sql << "INSERT INTO " << table << " (";
-    
-    bool first = true;
-    for (const auto& [column, _] : data) {
-        if (!first) sql << ", ";
-        sql << column;
-        first = false;
-    }
-    
-    sql << ") VALUES (";
-    
-    first = true;
-    for (const auto& [_, value] : data) {
-        if (!first) sql << ", ";
-        sql << "'" << value << "'"; // TODO: Proper escaping
-        first = false;
-    }
-    
-    sql << ")";
-    
-    return sql.str();
-}
-
-std::string CacheManager::BuildUpdateSQL(const std::string& table, 
-                                          const std::string& primary_key,
-                                          const std::map<std::string, std::string>& data) {
-    std::stringstream sql;
-    sql << "UPDATE " << table << " SET ";
-    
-    bool first = true;
-    for (const auto& [column, value] : data) {
-        if (!first) sql << ", ";
-        sql << column << " = '" << value << "'"; // TODO: Proper escaping
-        first = false;
-    }
-    
-    sql << " WHERE id = '" << primary_key << "'";
-    
-    return sql.str();
-}
-
-// ==================== Lua Bindings ====================
-
-void CacheLuaBinding::Register(lua_State* L) {
-    lua_newtable(L);
-    
-    lua_pushcfunction(L, LuaCacheSet);
-    lua_setfield(L, -2, "set");
-    
-    lua_pushcfunction(L, LuaCacheGet);
-    lua_setfield(L, -2, "get");
-    
-    lua_pushcfunction(L, LuaCacheDel);
-    lua_setfield(L, -2, "del");
-    
-    lua_pushcfunction(L, LuaCacheHSet);
-    lua_setfield(L, -2, "hset");
-    
-    lua_pushcfunction(L, LuaCacheHGet);
-    lua_setfield(L, -2, "hget");
-    
-    lua_pushcfunction(L, LuaCacheHGetAll);
-    lua_setfield(L, -2, "hgetall");
-    
-    lua_pushcfunction(L, LuaCacheExists);
-    lua_setfield(L, -2, "exists");
-    
-    lua_pushcfunction(L, LuaCacheSync);
-    lua_setfield(L, -2, "sync");
-    
-    lua_pushcfunction(L, LuaCacheSyncAll);
-    lua_setfield(L, -2, "sync_all");
-    
-    lua_pushcfunction(L, LuaCacheLoadFromMySQL);
-    lua_setfield(L, -2, "load_from_mysql");
-    
-    lua_pushcfunction(L, LuaCacheWarm);
-    lua_setfield(L, -2, "warm");
-    
-    lua_pushcfunction(L, LuaCacheStats);
-    lua_setfield(L, -2, "stats");
-    
-    lua_pushcfunction(L, LuaCacheClear);
-    lua_setfield(L, -2, "clear");
-    
-    lua_setglobal(L, "cache");
-}
-
-int CacheLuaBinding::LuaCacheSet(lua_State* L) {
-    const char* key = luaL_checkstring(L, 1);
-    const char* value = luaL_checkstring(L, 2);
-    const char* table = luaL_optstring(L, 3, "");
-    const char* primary_key = luaL_optstring(L, 4, "");
-    int64_t ttl = luaL_optinteger(L, 5, 0);
-    
-    bool success = CacheManager::Instance().Set(key, value, table, primary_key, ttl);
-    lua_pushboolean(L, success);
-    return 1;
-}
-
-int CacheLuaBinding::LuaCacheGet(lua_State* L) {
-    const char* key = luaL_checkstring(L, 1);
-    
-    std::string value = CacheManager::Instance().Get(key);
-    if (value.empty()) {
-        lua_pushnil(L);
-    } else {
-        lua_pushstring(L, value.c_str());
-    }
-    return 1;
-}
-
-int CacheLuaBinding::LuaCacheDel(lua_State* L) {
-    const char* key = luaL_checkstring(L, 1);
-    
-    bool success = CacheManager::Instance().Del(key);
-    lua_pushboolean(L, success);
-    return 1;
-}
-
-int CacheLuaBinding::LuaCacheHSet(lua_State* L) {
-    const char* key = luaL_checkstring(L, 1);
-    const char* field = luaL_checkstring(L, 2);
-    const char* value = luaL_checkstring(L, 3);
-    const char* table = luaL_optstring(L, 4, "");
-    const char* primary_key = luaL_optstring(L, 5, "");
-    
-    bool success = CacheManager::Instance().HSet(key, field, value, table, primary_key);
-    lua_pushboolean(L, success);
-    return 1;
-}
-
-int CacheLuaBinding::LuaCacheHGet(lua_State* L) {
-    const char* key = luaL_checkstring(L, 1);
-    const char* field = luaL_checkstring(L, 2);
-    
-    std::string value = CacheManager::Instance().HGet(key, field);
-    if (value.empty()) {
-        lua_pushnil(L);
-    } else {
-        lua_pushstring(L, value.c_str());
-    }
-    return 1;
-}
-
-int CacheLuaBinding::LuaCacheHGetAll(lua_State* L) {
-    const char* key = luaL_checkstring(L, 1);
-    
-    auto result = CacheManager::Instance().HGetAll(key);
-    
-    lua_newtable(L);
-    for (const auto& [field, value] : result) {
-        lua_pushstring(L, value.c_str());
-        lua_setfield(L, -2, field.c_str());
-    }
-    return 1;
-}
-
-int CacheLuaBinding::LuaCacheExists(lua_State* L) {
-    const char* key = luaL_checkstring(L, 1);
-    
-    bool exists = CacheManager::Instance().Exists(key);
-    lua_pushboolean(L, exists);
-    return 1;
-}
-
-int CacheLuaBinding::LuaCacheSync(lua_State* L) {
-    const char* key = luaL_checkstring(L, 1);
-    
-    bool success = CacheManager::Instance().SyncToMySQL(key);
-    lua_pushboolean(L, success);
-    return 1;
-}
-
-int CacheLuaBinding::LuaCacheSyncAll(lua_State* L) {
-    bool success = CacheManager::Instance().SyncAllToMySQL();
-    lua_pushboolean(L, success);
-    return 1;
-}
-
-int CacheLuaBinding::LuaCacheLoadFromMySQL(lua_State* L) {
-    const char* table = luaL_checkstring(L, 1);
-    const char* primary_key = luaL_checkstring(L, 2);
-    
-    bool success = CacheManager::Instance().LoadFromMySQL(table, primary_key);
-    lua_pushboolean(L, success);
-    return 1;
-}
-
-int CacheLuaBinding::LuaCacheWarm(lua_State* L) {
-    const char* table = luaL_checkstring(L, 1);
-    const char* where_clause = luaL_optstring(L, 2, "");
-    
-    CacheManager::Instance().WarmCache(table, where_clause);
-    lua_pushboolean(L, true);
-    return 1;
-}
-
-int CacheLuaBinding::LuaCacheStats(lua_State* L) {
-    auto stats = CacheManager::Instance().GetStats();
-    
-    lua_newtable(L);
-    
-    lua_pushinteger(L, stats.hits);
-    lua_setfield(L, -2, "hits");
-    
-    lua_pushinteger(L, stats.misses);
-    lua_setfield(L, -2, "misses");
-    
-    lua_pushinteger(L, stats.writes);
-    lua_setfield(L, -2, "writes");
-    
-    lua_pushinteger(L, stats.syncs);
-    lua_setfield(L, -2, "syncs");
-    
-    lua_pushinteger(L, stats.evictions);
-    lua_setfield(L, -2, "evictions");
-    
-    double hit_rate = (stats.hits + stats.misses > 0) 
-                      ? (100.0 * stats.hits / (stats.hits + stats.misses)) 
-                      : 0.0;
-    lua_pushnumber(L, hit_rate);
-    lua_setfield(L, -2, "hit_rate");
-    
-    return 1;
-}
-
-int CacheLuaBinding::LuaCacheClear(lua_State* L) {
-    CacheManager::Instance().Clear();
-    lua_pushboolean(L, true);
-    return 1;
 }
 
 }

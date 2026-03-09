@@ -150,7 +150,15 @@ set_target_properties(mmo_server PROPERTIES
 )
 
 add_executable(test_network_client ../test_network_client.cpp)
-target_link_libraries(test_network_client PRIVATE ws2_32)
+target_link_libraries(test_network_client PRIVATE 
+    ws2_32
+    ${Protobuf_LIBRARIES}
+    proto_module
+)
+target_include_directories(test_network_client PRIVATE
+    ${PROTO_DIR}
+    ${Protobuf_INCLUDE_DIRS}
+)
 set_target_properties(test_network_client PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )

@@ -1,3 +1,7 @@
+#include "proto/login.pb.h"
+#include "proto/common.pb.h"
+
+
 #include <iostream>
 #include <string>
 #include <thread>
@@ -9,6 +13,7 @@
 #include <ws2tcpip.h>
 
 #pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "libprotobuf.lib")
 
 class NetworkClient {
 public:
@@ -61,10 +66,21 @@ public:
     }
 
     bool SendLoginRequest(const std::string& account, const std::string& password) {
-        std::string login_data = account + ":" + password;
-        
+        mmo::LoginRequest request;
+        request.set_account(account);
+        request.set_password(password);
+        request.set_platform("test");
+        request.set_version("1.0.0");
+        request.set_device_id("test_device");
+
+        std::string serialized;
+        if (!request.SerializeToString(&serialized)) {
+            std::cerr << "Failed to serialize login request" << std::endl;
+            return false;
+        }
+
         uint32_t msg_id = 1;
-        uint32_t msg_len = static_cast<uint32_t>(login_data.size());
+        uint32_t msg_len = static_cast<uint32_t>(serialized.size());
 
         std::vector<uint8_t> data;
         data.reserve(sizeof(uint32_t) * 2 + msg_len);
@@ -73,16 +89,24 @@ public:
             reinterpret_cast<const uint8_t*>(&msg_id) + sizeof(uint32_t));
         data.insert(data.end(), reinterpret_cast<const uint8_t*>(&msg_len), 
             reinterpret_cast<const uint8_t*>(&msg_len) + sizeof(uint32_t));
-        data.insert(data.end(), login_data.begin(), login_data.end());
+        data.insert(data.end(), serialized.begin(), serialized.end());
 
+        std::cout << "Sending login request: account=" << account << ", size=" << data.size() << std::endl;
         return SendData(data);
     }
 
     bool SendHeartbeat() {
-        int64_t timestamp = std::chrono::system_clock::now().time_since_epoch().count();
-        
+        mmo::Heartbeat request;
+        request.set_timestamp(std::chrono::system_clock::now().time_since_epoch().count());
+
+        std::string serialized;
+        if (!request.SerializeToString(&serialized)) {
+            std::cerr << "Failed to serialize heartbeat" << std::endl;
+            return false;
+        }
+
         uint32_t msg_id = 100;
-        uint32_t msg_len = sizeof(timestamp);
+        uint32_t msg_len = static_cast<uint32_t>(serialized.size());
 
         std::vector<uint8_t> data;
         data.reserve(sizeof(uint32_t) * 2 + msg_len);
@@ -91,13 +115,13 @@ public:
             reinterpret_cast<const uint8_t*>(&msg_id) + sizeof(uint32_t));
         data.insert(data.end(), reinterpret_cast<const uint8_t*>(&msg_len), 
             reinterpret_cast<const uint8_t*>(&msg_len) + sizeof(uint32_t));
-        data.insert(data.end(), reinterpret_cast<const uint8_t*>(&timestamp), 
-            reinterpret_cast<const uint8_t*>(&timestamp) + sizeof(timestamp));
+        data.insert(data.end(), serialized.begin(), serialized.end());
 
+        std::cout << "Sending heartbeat, size=" << data.size() << std::endl;
         return SendData(data);
     }
 
-    bool ReceiveData() {
+    bool ReceiveLoginResponse() {
         std::vector<uint8_t> header(sizeof(uint32_t) * 2);
         int received = 0;
 
@@ -105,6 +129,7 @@ public:
             int bytes = recv(socket_, reinterpret_cast<char*>(header.data()) + received, 
                 static_cast<int>(sizeof(uint32_t) * 2 - received), 0);
             if (bytes <= 0) {
+                std::cerr << "Failed to receive header" << std::endl;
                 return false;
             }
             received += bytes;
@@ -125,13 +150,73 @@ public:
                 int bytes = recv(socket_, reinterpret_cast<char*>(data.data()) + received, 
                     static_cast<int>(msg_len - received), 0);
                 if (bytes <= 0) {
+                    std::cerr << "Failed to receive data" << std::endl;
                     return false;
                 }
                 received += bytes;
             }
 
-            std::string data_str(data.begin(), data.end());
-            std::cout << "Message data: " << data_str << std::endl;
+            if (msg_id == 1) {
+                mmo::LoginResponse response;
+                if (response.ParseFromArray(data.data(), static_cast<int>(data.size()))) {
+                    std::cout << "Login response: code=" << response.result().code() 
+                              << ", message=" << response.result().message()
+                              << ", player_id=" << response.player_id()
+                              << ", token=" << response.token() << std::endl;
+                } else {
+                    std::cerr << "Failed to parse login response" << std::endl;
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    bool ReceiveHeartbeatResponse() {
+        std::vector<uint8_t> header(sizeof(uint32_t) * 2);
+        int received = 0;
+
+        while (received < sizeof(uint32_t) * 2) {
+            int bytes = recv(socket_, reinterpret_cast<char*>(header.data()) + received, 
+                static_cast<int>(sizeof(uint32_t) * 2 - received), 0);
+            if (bytes <= 0) {
+                std::cerr << "Failed to receive header" << std::endl;
+                return false;
+            }
+            received += bytes;
+        }
+
+        uint32_t msg_id = 0;
+        uint32_t msg_len = 0;
+        std::memcpy(&msg_id, header.data(), sizeof(uint32_t));
+        std::memcpy(&msg_len, header.data() + sizeof(uint32_t), sizeof(uint32_t));
+
+        std::cout << "Received message: msg_id=" << msg_id << ", msg_len=" << msg_len << std::endl;
+
+        if (msg_len > 0) {
+            std::vector<uint8_t> data(msg_len);
+            received = 0;
+
+            while (static_cast<size_t>(received) < msg_len) {
+                int bytes = recv(socket_, reinterpret_cast<char*>(data.data()) + received, 
+                    static_cast<int>(msg_len - received), 0);
+                if (bytes <= 0) {
+                    std::cerr << "Failed to receive data" << std::endl;
+                    return false;
+                }
+                received += bytes;
+            }
+
+            if (msg_id == 100) {
+                mmo::Heartbeat response;
+                if (response.ParseFromArray(data.data(), static_cast<int>(data.size()))) {
+                    std::cout << "Heartbeat response: timestamp=" << response.timestamp() << std::endl;
+                } else {
+                    std::cerr << "Failed to parse heartbeat response" << std::endl;
+                    return false;
+                }
+            }
         }
 
         return true;
@@ -149,6 +234,7 @@ private:
             }
             sent += bytes;
         }
+        std::cout << "Sent " << sent << " bytes" << std::endl;
         return true;
     }
 
@@ -173,7 +259,7 @@ int main() {
     }
 
     std::cout << "Receiving response..." << std::endl;
-    if (!client.ReceiveData()) {
+    if (!client.ReceiveLoginResponse()) {
         std::cerr << "Failed to receive response" << std::endl;
         return 1;
     }
@@ -185,7 +271,7 @@ int main() {
     }
 
     std::cout << "Receiving heartbeat response..." << std::endl;
-    if (!client.ReceiveData()) {
+    if (!client.ReceiveHeartbeatResponse()) {
         std::cerr << "Failed to receive heartbeat response" << std::endl;
         return 1;
     }

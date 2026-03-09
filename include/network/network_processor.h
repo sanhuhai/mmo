@@ -1,4 +1,10 @@
 #pragma once
+#include "message_queue.h"
+#include "network.pb.h"
+#include "login.pb.h"
+#include "player.pb.h"
+#include "game.pb.h"
+
 
 #include <string>
 #include <vector>
@@ -8,11 +14,7 @@
 #include <mutex>
 #include <memory>
 #include <atomic>
-#include "message_queue.h"
-#include "network.pb.h"
-#include "login.pb.h"
-#include "player.pb.h"
-#include "game.pb.h"
+
 
 namespace mmo {
 

@@ -229,7 +229,7 @@ void NetworkServer::SendResponse(uint64_t session_id, uint32_t msg_id, const goo
         reinterpret_cast<const uint8_t*>(&msg_len) + sizeof(uint32_t));
     data.insert(data.end(), serialized.begin(), serialized.end());
 
-    tcp_server_->SendTo(session_id, data);
+    tcp_server_->SendTo(static_cast<uint32_t>(session_id), data);
 }
 
 }
