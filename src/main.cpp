@@ -9,6 +9,7 @@
 #include "script/lua_register.h"
 #include "player/player_manager.h"
 #include "player/weapon.h"
+#include "network/network_server.h"
 
 #ifdef USE_MYSQL
 #include "db/mysql_pool.h"
@@ -123,6 +124,21 @@ int main(int argc, char* argv[]) {
         bool server_test = lua_engine.CallModule("server", "on_server_start");
         LOG_INFO("Server module test: {}", server_test ? "SUCCESS" : "FAILED");
 
+        // 初始化网络服务器
+        LOG_INFO("Initializing network server...");
+        uint16_t network_port = mmo::Config::Instance().Get("network.port", mmo::ConfigValue("8888")).AsInt();
+        mmo::NetworkServer network_server(network_port);
+        
+        if (!network_server.Initialize()) {
+            LOG_ERROR("Failed to initialize network server");
+            return 1;
+        }
+
+        if (!network_server.Start()) {
+            LOG_ERROR("Failed to start network server");
+            return 1;
+        }
+
         /*if (!lua_engine.DoFile("../lua/main.lua")) {
             LOG_WARN("Main Lua script not found or has errors");
         }*/
@@ -161,8 +177,9 @@ int main(int argc, char* argv[]) {
                 last_update = now;
                 
                 mmo::ServiceManager::Instance().UpdateAll(delta.count());
+                network_server.Update(delta.count());
                 
-                lua_engine.CallModule("weapon_manager", "test_weapon_types");
+                //lua_engine.CallModule("weapon_manager", "test_weapon_types");
             }
 
 #ifdef _WIN32
@@ -174,6 +191,9 @@ int main(int argc, char* argv[]) {
 
         // 使用模块调用方式
         lua_engine.CallModule("server", "on_server_stop");
+        
+        // 停止网络服务器
+        network_server.Stop();
 
 #ifdef USE_MYSQL
         mmo::PlayerManager::Instance().Shutdown();

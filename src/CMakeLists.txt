@@ -8,6 +8,8 @@ set(NETWORK_SOURCES
     network/connection.cpp
     network/connection_manager.cpp
     network/tcp_server.cpp
+    network/network_processor.cpp
+    network/network_server.cpp
 )
 
 set(SCRIPT_SOURCES
@@ -144,6 +146,12 @@ add_executable(mmo_server main.cpp)
 target_link_libraries(mmo_server PRIVATE mmo_core)
 
 set_target_properties(mmo_server PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+)
+
+add_executable(test_network_client ../test_network_client.cpp)
+target_link_libraries(test_network_client PRIVATE ws2_32)
+set_target_properties(test_network_client PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
