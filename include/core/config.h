@@ -9,7 +9,9 @@
 #include <sstream>
 #include <algorithm>
 #include <iostream>
+#ifdef WIN32
 #include <direct.h>
+#endif
 
 namespace mmo {
 
@@ -60,9 +62,11 @@ public:
     }
 
     bool Load(const std::string& filename) {
-        char addr[100] = { 0 };
-        _getcwd(addr, sizeof(addr));
-        std::cout << addr << std::endl;
+#ifdef WIN32
+		char addr[100] = { 0 };
+		_getcwd(addr, sizeof(addr));
+		std::cout << addr << std::endl;
+#endif
         std::ifstream file(filename);
         if (!file.is_open()) {
             return false;
