@@ -226,10 +226,8 @@ public:
         std::string player_id_str = std::to_string(player_id);
         
         luabridge::getGlobalNamespace(L)
-            .beginNamespace("mmo")
-                .beginNamespace("player_cache")
-                    .addVariable(player_id_str.c_str(), lua_table)
-                .endNamespace()
+            .beginNamespace("PlayerCache")
+                .addVariable(player_id_str.c_str(), lua_table)
             .endNamespace();
 
         LOG_INFO("Synced player {} to Lua", player_id);
@@ -256,10 +254,8 @@ public:
             std::string player_id_str = std::to_string(player_id);
             
             luabridge::getGlobalNamespace(L)
-                .beginNamespace("mmo")
-                    .beginNamespace("player_cache")
-                        .addVariable(player_id_str.c_str(), lua_table)
-                    .endNamespace()
+                .beginNamespace("PlayerCache")
+                    .addVariable(player_id_str.c_str(), lua_table)
                 .endNamespace();
         }
         

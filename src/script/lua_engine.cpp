@@ -164,10 +164,14 @@ void LuaEngine::LoadAllMoudle() {
 	for (const auto& entry : std::filesystem::directory_iterator(script_path_)) {
 		// 只处理普通文件 (排除子目录)
 		if (entry.is_regular_file()) {
-			std::cout << "文件名: " << entry.path().filename().string() << std::endl;
+			
 			// 如果需要完整路径: entry.path().string()
             filename = entry.path().filename().string();
             //filename.substr(0, filename.find('.'));
+            if (filename.substr(filename.find('.') + 1) != "lua") {
+                continue;
+            }
+            std::cout << "文件名: " << entry.path().filename().string() << std::endl;
             LoadModule(filename.substr(0, filename.find('.')));
 		}
 

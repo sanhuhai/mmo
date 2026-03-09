@@ -1,4 +1,5 @@
 -- Weapon management script
+require("socket.core")
 
 function on_server_start()
     print("=== Weapon System Test ===")
@@ -7,10 +8,10 @@ function on_server_start()
     print("\n1. Testing random weapon generation...")
     
     -- Generate different rarity weapons
-    local common_weapon = mmo.weapon.generate_random_weapon(10, mmo.weapon.WEAPON_RARITY_COMMON)
-    local rare_weapon = mmo.weapon.generate_random_weapon(30, mmo.weapon.WEAPON_RARITY_RARE)
-    local epic_weapon = mmo.weapon.generate_random_weapon(50, mmo.weapon.WEAPON_RARITY_EPIC)
-    local legendary_weapon = mmo.weapon.generate_random_weapon(70, mmo.weapon.WEAPON_RARITY_LEGENDARY)
+    local common_weapon = Weapon.generate_random(10, Weapon.RARITY_COMMON)
+    local rare_weapon = Weapon.generate_random(30, Weapon.RARITY_RARE)
+    local epic_weapon = Weapon.generate_random(50, Weapon.RARITY_EPIC)
+    local legendary_weapon = Weapon.generate_random(70, Weapon.RARITY_LEGENDARY)
     
     if common_weapon then
         print("Common weapon created: " .. common_weapon:get_name())
@@ -35,11 +36,11 @@ function on_server_start()
     -- Test 2: Create custom weapon
     print("\n2. Testing custom weapon creation...")
     
-    local custom_weapon = mmo.weapon.create_weapon(
+    local custom_weapon = Weapon.create(
         12345,
         "Excalibur",
-        mmo.weapon.WEAPON_TYPE_SWORD,
-        mmo.weapon.WEAPON_RARITY_LEGENDARY,
+        Weapon.TYPE_SWORD,
+        Weapon.RARITY_LEGENDARY,
         100
     )
     
@@ -49,9 +50,9 @@ function on_server_start()
         -- Add effects to custom weapon
         print("Adding effects to custom weapon...")
         
-        local fire_effect = mmo.FireDamageEffect(50, 10)
-        local ice_effect = mmo.IceSlowEffect(0.3, 5)
-        local lightning_effect = mmo.LightningStrikeEffect(100, 0.2)
+        local fire_effect = FireDamageEffect(50, 10)
+        local ice_effect = IceSlowEffect(0.3, 5)
+        local lightning_effect = LightningStrikeEffect(100, 0.2)
         
         custom_weapon:add_effect(fire_effect)
         custom_weapon:add_effect(ice_effect)
@@ -68,17 +69,17 @@ function on_server_start()
     
     if custom_weapon then
         print("Equipping weapon to player " .. player_id)
-        mmo.weapon.equip_weapon(player_id, custom_weapon:get_weapon_id())
+        Weapon.equip(player_id, custom_weapon:get_id())
         
-        local equipped_weapon = mmo.weapon.get_equipped_weapon(player_id)
+        local equipped_weapon = Weapon.get_equipped(player_id)
         if equipped_weapon then
             print("Equipped weapon: " .. equipped_weapon:get_name())
         end
         
         print("Unequipping weapon from player " .. player_id)
-        mmo.weapon.unequip_weapon(player_id)
+        Weapon.unequip(player_id)
         
-        local unequipped_weapon = mmo.weapon.get_equipped_weapon(player_id)
+        local unequipped_weapon = Weapon.get_equipped(player_id)
         if not unequipped_weapon then
             print("Weapon successfully unequipped")
         end
@@ -98,15 +99,15 @@ function on_server_start()
     -- Test 5: Weapon management
     print("\n5. Testing weapon management...")
     
-    local weapon_count = mmo.weapon.get_weapon_count()
+    local weapon_count = Weapon.count()
     print("Total weapons created: " .. weapon_count)
     
     if custom_weapon then
-        local weapon_id = custom_weapon:get_weapon_id()
+        local weapon_id = custom_weapon:get_id()
         print("Removing custom weapon (ID: " .. weapon_id .. ")")
-        mmo.weapon.remove_weapon(weapon_id)
+        Weapon.remove(weapon_id)
         
-        local remaining_count = mmo.weapon.get_weapon_count()
+        local remaining_count = Weapon.count()
         print("Remaining weapons: " .. remaining_count)
     end
     
@@ -115,25 +116,25 @@ end
 
 function on_server_stop()
     print("Weapon system shutting down...")
-    local weapon_count = mmo.weapon.get_weapon_count()
+    local weapon_count = Weapon.count()
     print("Weapons still in system: " .. weapon_count)
 end
 
 function create_weapon_for_player(player_id, level, rarity)
-    local weapon = mmo.weapon.generate_random_weapon(level, rarity)
+    local weapon = Weapon.generate_random(level, rarity)
     if weapon then
-        mmo.weapon.equip_weapon(player_id, weapon:get_weapon_id())
+        Weapon.equip(player_id, weapon:get_id())
         return weapon
     end
     return nil
 end
 
 function get_player_weapon(player_id)
-    return mmo.weapon.get_equipped_weapon(player_id)
+    return Weapon.get_equipped(player_id)
 end
 
 function unequip_player_weapon(player_id)
-    mmo.weapon.unequip_weapon(player_id)
+    Weapon.unequip(player_id)
 end
 
 function print_weapon_info(weapon)
@@ -149,25 +150,25 @@ function test_weapon_types()
     print("\n=== Testing Weapon Types ===")
     
     local weapon_types = {
-        {mmo.weapon.WEAPON_TYPE_SWORD, "Sword"},
-        {mmo.weapon.WEAPON_TYPE_AXE, "Axe"},
-        {mmo.weapon.WEAPON_TYPE_BOW, "Bow"},
-        {mmo.weapon.WEAPON_TYPE_WAND, "Wand"},
-        {mmo.weapon.WEAPON_TYPE_DAGGER, "Dagger"},
-        {mmo.weapon.WEAPON_TYPE_SHIELD, "Shield"},
-        {mmo.weapon.WEAPON_TYPE_GUN, "Gun"},
-        {mmo.weapon.WEAPON_TYPE_STAFF, "Staff"},
-        {mmo.weapon.WEAPON_TYPE_SPEAR, "Spear"},
-        {mmo.weapon.WEAPON_TYPE_FIST, "Fist"}
+        {Weapon.TYPE_SWORD, "Sword"},
+        {Weapon.TYPE_AXE, "Axe"},
+        {Weapon.TYPE_BOW, "Bow"},
+        {Weapon.TYPE_WAND, "Wand"},
+        {Weapon.TYPE_DAGGER, "Dagger"},
+        {Weapon.TYPE_SHIELD, "Shield"},
+        {Weapon.TYPE_GUN, "Gun"},
+        {Weapon.TYPE_STAFF, "Staff"},
+        {Weapon.TYPE_SPEAR, "Spear"},
+        {Weapon.TYPE_FIST, "Fist"}
     }
     
     for _, weapon_type in ipairs(weapon_types) do
         local type_id, type_name = unpack(weapon_type)
-        local weapon = mmo.weapon.create_weapon(
+        local weapon = Weapon.create(
             math.random(10000, 99999),
             "Test " .. type_name,
             type_id,
-            mmo.weapon.WEAPON_RARITY_RARE,
+            Weapon.RARITY_RARE,
             30
         )
         if weapon then

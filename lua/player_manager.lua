@@ -11,10 +11,10 @@ end
 -- Load all players from database
 function player_manager.load_all_players()
     print("Loading all players from database...")
-    local success = mmo.player.load_all_players_from_database()
+    local success = Player.load_all_from_db()
     if success then
         print("Successfully loaded all players from database")
-        local count = mmo.player.get_player_count()
+        local count = Player.count()
         print("Total players: " .. tostring(count))
     else
         print("Failed to load players from database")
@@ -25,7 +25,7 @@ end
 -- Load a specific player from database
 function player_manager.load_player(player_id)
     print("Loading player " .. tostring(player_id) .. " from database...")
-    local success = mmo.player.load_player_from_database(player_id)
+    local success = Player.load_from_db(player_id)
     if success then
         print("Successfully loaded player " .. tostring(player_id))
     else
@@ -37,7 +37,7 @@ end
 -- Save a player to database
 function player_manager.save_player(player_id)
     print("Saving player " .. tostring(player_id) .. " to database...")
-    local success = mmo.player.save_player_to_database(player_id)
+    local success = Player.save_to_db(player_id)
     if success then
         print("Successfully saved player " .. tostring(player_id))
     else
@@ -49,7 +49,7 @@ end
 -- Sync all players to Lua
 function player_manager.sync_all_players()
     print("Syncing all players to Lua...")
-    local success = mmo.player.sync_all_players_to_lua()
+    local success = Player.sync_all_to_lua()
     if success then
         print("Successfully synced all players to Lua")
     else
@@ -61,7 +61,7 @@ end
 -- Sync a specific player to Lua
 function player_manager.sync_player(player_id)
     print("Syncing player " .. tostring(player_id) .. " to Lua...")
-    local success = mmo.player.sync_player_to_lua(player_id)
+    local success = Player.sync_to_lua(player_id)
     if success then
         print("Successfully synced player " .. tostring(player_id) .. " to Lua")
     else
@@ -72,7 +72,7 @@ end
 
 -- Get player count
 function player_manager.get_count()
-    local count = mmo.player.get_player_count()
+    local count = Player.count()
     print("Total players in cache: " .. tostring(count))
     return count
 end
@@ -80,7 +80,7 @@ end
 -- Remove player from cache
 function player_manager.remove_player(player_id)
     print("Removing player " .. tostring(player_id) .. " from cache...")
-    local success = mmo.player.remove_player_from_cache(player_id)
+    local success = Player.remove_from_cache(player_id)
     if success then
         print("Successfully removed player " .. tostring(player_id))
     else
@@ -91,8 +91,8 @@ end
 
 -- Get player info from cache
 function player_manager.get_player_info(player_id)
-    if mmo.player_cache and mmo.player_cache[tostring(player_id)] then
-        return mmo.player_cache[tostring(player_id)]
+    if PlayerCache and PlayerCache[tostring(player_id)] then
+        return PlayerCache[tostring(player_id)]
     else
         print("Player " .. tostring(player_id) .. " not found in cache")
         return nil
@@ -121,9 +121,9 @@ end
 -- Display all players
 function player_manager.display_all_players()
     print("=== All Players ===")
-    if mmo.player_cache then
+    if PlayerCache then
         local count = 0
-        for player_id, player_info in pairs(mmo.player_cache) do
+        for player_id, player_info in pairs(PlayerCache) do
             print("[" .. player_id .. "] " .. player_info.name .. " (Level " .. tostring(player_info.level) .. ")")
             count = count + 1
         end
