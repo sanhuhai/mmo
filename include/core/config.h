@@ -8,6 +8,8 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <iostream>
+#include <direct.h>
 
 namespace mmo {
 
@@ -58,6 +60,9 @@ public:
     }
 
     bool Load(const std::string& filename) {
+        char addr[100] = { 0 };
+        _getcwd(addr, sizeof(addr));
+        std::cout << addr << std::endl;
         std::ifstream file(filename);
         if (!file.is_open()) {
             return false;

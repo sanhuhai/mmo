@@ -2,13 +2,13 @@
 
 #ifdef USE_RAPIDJSON
 
+#include "core/logger.h"
 #include <string>
 #include <map>
 #include <vector>
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
 #include <rapidjson/stringbuffer.h>
-#include "core/logger.h"
 
 namespace mmo {
 

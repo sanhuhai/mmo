@@ -2,6 +2,7 @@
 
 #ifdef USE_MYSQL
 
+#include "db/mysql_connection.h"
 #include <memory>
 #include <queue>
 #include <mutex>
@@ -9,8 +10,6 @@
 #include <atomic>
 #include <thread>
 #include <chrono>
-
-#include "db/mysql_connection.h"
 
 namespace mmo {
 

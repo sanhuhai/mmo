@@ -1,13 +1,14 @@
 #pragma once
 
+#include "core/logger.h"
+
 #include <string>
 #include <vector>
 #include <memory>
 #include <random>
 #include <unordered_map>
 #include <mutex>
-
-#include "core/logger.h"
+#include <algorithm>
 
 namespace mmo {
 

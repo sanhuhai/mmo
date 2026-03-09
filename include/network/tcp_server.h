@@ -1,13 +1,12 @@
 #pragma once
 
+#include "network/connection.h"
+#include "network/connection_manager.h"
 #include <memory>
 #include <thread>
 #include <vector>
 #include <atomic>
 #include <functional>
-
-#include "network/connection.h"
-#include "network/connection_manager.h"
 
 namespace mmo {
 

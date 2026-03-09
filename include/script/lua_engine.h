@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/logger.h"
 #include <string>
 #include <memory>
 #include <functional>
@@ -13,8 +14,6 @@ extern "C" {
 }
 
 #include "LuaBridge/LuaBridge.h"
-
-#include "core/logger.h"
 
 namespace mmo {
 

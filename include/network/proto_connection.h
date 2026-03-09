@@ -1,10 +1,9 @@
 #pragma once
 
-#include <memory>
-#include <functional>
-
 #include "network/connection.h"
 #include "proto/message_codec.h"
+#include <memory>
+#include <functional>
 
 namespace mmo {
 

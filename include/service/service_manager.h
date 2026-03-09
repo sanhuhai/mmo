@@ -1,13 +1,14 @@
 #pragma once
 
+#include "service/service_base.h"
+#include "service/gate_service.h"
+#include "service/game_service.h"
 #include <unordered_map>
 #include <memory>
 #include <atomic>
 #include <mutex>
-
-#include "service/service_base.h"
-#include "service/gate_service.h"
-#include "service/game_service.h"
+#include <filesystem>
+#include <vector>
 
 namespace mmo {
 
@@ -137,6 +138,44 @@ public:
         if (service) {
             service->PushMessage(msg);
         }
+    }
+
+    bool RegisterLuaServices(const std::string& lua_service_dir = "lua/service") {
+        LOG_INFO("Registering Lua services from: {}", lua_service_dir);
+        
+        std::filesystem::path service_path(lua_service_dir);
+        if (!std::filesystem::exists(service_path)) {
+            LOG_ERROR("Lua service directory not found: {}", lua_service_dir);
+            return false;
+        }
+        
+        int registered_count = 0;
+        
+        for (const auto& entry : std::filesystem::directory_iterator(service_path)) {
+            if (entry.is_directory()) {
+                std::string service_name = entry.path().filename().string();
+                std::string init_file = (entry.path() / "init.lua").string();
+                
+                if (std::filesystem::exists(init_file)) {
+                    auto service = CreateService("lua", service_name);
+                    if (service) {
+                        std::string module_path = "service." + service_name + ".init";
+                        if (service->GetLuaEngine().DoFile(init_file)) {
+                            LOG_INFO("Lua service '{}' registered successfully", service_name);
+                            registered_count++;
+                        } else {
+                            LOG_ERROR("Failed to load Lua service module: {}", module_path);
+                            DestroyService(service_name);
+                        }
+                    }
+                } else {
+                    LOG_WARN("Lua service '{}' missing init.lua, skipping", service_name);
+                }
+            }
+        }
+        
+        LOG_INFO("Registered {} Lua services", registered_count);
+        return registered_count > 0;
     }
 
 private:

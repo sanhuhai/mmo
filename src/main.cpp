@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        mmo::Logger::Instance().Initialize("logs/server.log", mmo::LogLevel::Debug);
+        mmo::Logger::Instance().Initialize("../../logs/server.log", mmo::LogLevel::Debug);
 
 
 
@@ -72,6 +72,7 @@ int main(int argc, char* argv[]) {
 
 #ifdef USE_MYSQL
         mmo::MySQLConfig mysql_config;
+        mmo::Config::Instance().Load("../../config/server.ini");
         mysql_config.host = mmo::Config::Instance().Get("mysql.host", mmo::ConfigValue("localhost")).AsString();
         mysql_config.port = mmo::Config::Instance().Get("mysql.port", mmo::ConfigValue("3306")).AsInt();
         mysql_config.user = mmo::Config::Instance().Get("mysql.user", mmo::ConfigValue("root")).AsString();
@@ -92,9 +93,9 @@ int main(int argc, char* argv[]) {
         }
 #endif
 
-        lua_engine.SetScriptPath("lua");
+        lua_engine.SetScriptPath("../lua");
 
-        if (!lua_engine.DoFile("lua/main.lua")) {
+        if (!lua_engine.DoFile("../lua/main.lua")) {
             LOG_WARN("Main Lua script not found or has errors");
         }
 
@@ -107,7 +108,7 @@ int main(int argc, char* argv[]) {
         if (gate_service) {
             auto gate = std::dynamic_pointer_cast<mmo::GateService>(gate_service);
             if (gate) {
-                uint16_t port = mmo::Config::Instance().Get("gate.port", mmo::ConfigValue("8888")).AsInt();
+                uint16_t port = mmo::Config::Instance().Get("gate.port", mmo::ConfigValue("8818")).AsInt();
                 gate->SetPort(port);
             }
         }

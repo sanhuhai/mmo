@@ -1,22 +1,20 @@
 #pragma once
 
+#include "core/logger.h"
+#include "player.pb.h"
+#include "proto/lua_protobuf.h"
 #include <string>
 #include <memory>
 #include <unordered_map>
 #include <mutex>
 #include <functional>
-
 #include <google/protobuf/message.h>
 #include <lua.hpp>
-#include <LuaBridge/LuaBridge.h>
-
-#include "core/logger.h"
-#include "player.pb.h"
-#include "proto/lua_protobuf.h"
+#include "LuaBridge/LuaBridge.h"
 
 #ifdef USE_MYSQL
-
 #include "db/mysql_pool.h"
+#endif
 
 namespace mmo {
 
@@ -318,11 +316,50 @@ public:
                 UNIQUE KEY idx_name (name)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         )";
+
+        std::string query_sql = R"(SELECT player_id, name, level, exp, hp, max_hp, mp, max_mp, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z, profession, gender from player;)";
+        auto data = conn->Query(query_sql);
+        
+        for (const auto &row : data.rows)
+        {
+            if (row.size() >= 16) {
+                mmo::PlayerInfo p;
+                
+                // 解析基本字段
+                p.set_player_id(std::stoull(row[0]));
+                p.set_name(row[1]);
+                p.set_level(std::stoi(row[2]));
+                p.set_exp(std::stoll(row[3]));
+                p.set_hp(std::stoi(row[4]));
+                p.set_max_hp(std::stoi(row[5]));
+                p.set_mp(std::stoi(row[6]));
+                p.set_max_mp(std::stoi(row[7]));
+                p.set_profession(std::stoi(row[14]));
+                p.set_gender(std::stoi(row[15]));
+                
+                // 解析位置
+                auto position = p.mutable_position();
+                position->set_x(std::stof(row[8]));
+                position->set_y(std::stof(row[9]));
+                position->set_z(std::stof(row[10]));
+                
+                // 解析旋转
+                auto rotation = p.mutable_rotation();
+                rotation->set_x(std::stof(row[11]));
+                rotation->set_y(std::stof(row[12]));
+                rotation->set_z(std::stof(row[13]));
+                
+                // 存储到玩家管理器
+                players_[p.player_id()] = std::make_shared<mmo::PlayerInfo>(p);
+            }
+        }
         
         if (!conn->Execute(sql)) {
             LOG_ERROR("Failed to create player table");
             return false;
         }
+
+        
 
         LOG_INFO("Database tables initialized");
         return true;
@@ -339,5 +376,3 @@ private:
 };
 
 }
-
-#endif

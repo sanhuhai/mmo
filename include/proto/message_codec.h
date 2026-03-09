@@ -1,20 +1,18 @@
 #pragma once
 
-#include <memory>
-#include <string>
-#include <unordered_map>
-#include <functional>
-#include <vector>
-
-#include <google/protobuf/message.h>
-#include <google/protobuf/descriptor.h>
-
 #include "core/logger.h"
 #include "common.pb.h"
 #include "game.pb.h"
 #include "login.pb.h"
 #include "player.pb.h"
 #include "chat.pb.h"
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <functional>
+#include <vector>
+#include <google/protobuf/message.h>
+#include <google/protobuf/descriptor.h>
 
 namespace mmo {
 

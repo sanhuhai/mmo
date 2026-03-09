@@ -21,6 +21,12 @@ set(SERVICE_SOURCES
     service/game_service.cpp
 )
 
+if(ENABLE_SKYNET)
+    list(APPEND SERVICE_SOURCES
+        service/skynet_service.cpp
+    )
+endif()
+
 set(UTILS_SOURCES
     utils/thread_pool.cpp
     utils/buffer.cpp
@@ -123,6 +129,15 @@ endif()
 
 if(ENABLE_RAPIDJSON)
     target_compile_definitions(mmo_core PUBLIC USE_RAPIDJSON)
+endif()
+
+if(ENABLE_SKYNET)
+    target_link_libraries(mmo_core PUBLIC 
+        skynet_core
+        skynet_services
+        skynet_lualib
+    )
+    target_compile_definitions(mmo_core PUBLIC USE_SKYNET)
 endif()
 
 add_executable(mmo_server main.cpp)

@@ -206,8 +206,17 @@ if(ENABLE_MYSQL)
         # Check for bundled MySQL in third_party
         if(EXISTS "${THIRD_PARTY_DIR}/mysql/include/mysql.h")
             set(MySQL_INCLUDE_DIR "${THIRD_PARTY_DIR}/mysql/include")
-            set(MySQL_LIBRARY "${THIRD_PARTY_DIR}/mysql/lib/libmysql.lib")
-            message(STATUS "Found bundled MySQL in third_party")
+            if(PLATFORM_WINDOWS)
+                if(EXISTS "${THIRD_PARTY_DIR}/mysql/lib/libmysql.lib")
+                    set(MySQL_LIBRARY "${THIRD_PARTY_DIR}/mysql/lib/libmysql.lib")
+                    message(STATUS "Found bundled MySQL in third_party")
+                endif()
+            elseif(PLATFORM_LINUX)
+                if(EXISTS "${THIRD_PARTY_DIR}/mysql/lib/libmysqlclient.so")
+                    set(MySQL_LIBRARY "${THIRD_PARTY_DIR}/mysql/lib/libmysqlclient.so")
+                    message(STATUS "Found bundled MySQL in third_party")
+                endif()
+            endif()
         endif()
         
         # Windows paths
@@ -292,7 +301,7 @@ if(ENABLE_REDIS)
         message(STATUS "hiredis include: ${HIREDIS_INCLUDE_DIR}")
         message(STATUS "hiredis library: ${HIREDIS_LIBRARIES}")
     elseif(PLATFORM_LINUX)
-        # Linux: Use system hiredis library
+        # Linux: Use system hiredis library first, then bundled version
         message(STATUS "Using system hiredis library for Linux...")
         find_package(PkgConfig QUIET)
         if(PkgConfig_FOUND)
@@ -322,8 +331,17 @@ if(ENABLE_REDIS)
                     message(STATUS "hiredis include: ${HIREDIS_INCLUDE_DIRS}")
                     message(STATUS "hiredis library: ${HIREDIS_LIBRARIES}")
                 else()
-                    message(STATUS "hiredis not found, Redis support disabled")
-                    set(ENABLE_REDIS OFF)
+                    message(STATUS "hiredis not found in system, trying bundled version...")
+                    # Use bundled hiredis from third_party/redis/deps/hiredis
+                    set(HIREDIS_INCLUDE_DIR "${THIRD_PARTY_DIR}/redis/deps/hiredis")
+                    set(HIREDIS_LIBRARY "hiredis")
+                    set(HIREDIS_FOUND TRUE)
+                    set(HIREDIS_INCLUDE_DIRS ${HIREDIS_INCLUDE_DIR})
+                    set(HIREDIS_LIBRARIES ${HIREDIS_LIBRARY})
+                    include_directories(${HIREDIS_INCLUDE_DIRS})
+                    message(STATUS "Using bundled hiredis for Linux")
+                    message(STATUS "hiredis include: ${HIREDIS_INCLUDE_DIRS}")
+                    message(STATUS "hiredis library: ${HIREDIS_LIBRARIES}")
                 endif()
             endif()
         else()
@@ -347,12 +365,63 @@ if(ENABLE_REDIS)
                 message(STATUS "hiredis include: ${HIREDIS_INCLUDE_DIRS}")
                 message(STATUS "hiredis library: ${HIREDIS_LIBRARIES}")
             else()
-                message(STATUS "hiredis not found, Redis support disabled")
-                set(ENABLE_REDIS OFF)
+                message(STATUS "hiredis not found in system, trying bundled version...")
+                # Use bundled hiredis from third_party/redis/deps/hiredis
+                set(HIREDIS_INCLUDE_DIR "${THIRD_PARTY_DIR}/redis/deps/hiredis")
+                set(HIREDIS_LIBRARY "hiredis")
+                set(HIREDIS_FOUND TRUE)
+                set(HIREDIS_INCLUDE_DIRS ${HIREDIS_INCLUDE_DIR})
+                set(HIREDIS_LIBRARIES ${HIREDIS_LIBRARY})
+                include_directories(${HIREDIS_INCLUDE_DIRS})
+                message(STATUS "Using bundled hiredis for Linux")
+                message(STATUS "hiredis include: ${HIREDIS_INCLUDE_DIRS}")
+                message(STATUS "hiredis library: ${HIREDIS_LIBRARIES}")
             endif()
         endif()
     endif()
 endif()
+
+# ==========================================
+# Skynet Integration (skynet-cmake)
+# ==========================================
+# Temporarily disabled until skynet_service.cpp is updated to use the new API
+# if(EXISTS "${THIRD_PARTY_DIR}/skynet-cmake/skynet/skynet-src/skynet.h")
+#     message(STATUS "Found Skynet (skynet-cmake) in third_party")
+#     set(ENABLE_SKYNET ON)
+#     add_definitions(-DUSE_SKYNET)
+#     
+#     # Add skynet subdirectory
+#     add_subdirectory(${THIRD_PARTY_DIR}/skynet-cmake)
+#     
+#     # Include skynet directories
+#     include_directories(
+#         ${THIRD_PARTY_DIR}/skynet-cmake/skynet/skynet-src
+#         ${THIRD_PARTY_DIR}/skynet-cmake/skynet/lualib
+#         ${THIRD_PARTY_DIR}/skynet-cmake/skynet/service-src
+#         ${THIRD_PARTY_DIR}/skynet-cmake/skynet/3rd/lua
+#     )
+#     
+#     # Platform-specific skynet settings
+#     if(PLATFORM_WINDOWS)
+#         include_directories(
+#             ${THIRD_PARTY_DIR}/skynet-cmake/3rd/posix
+#             ${THIRD_PARTY_DIR}/skynet-cmake/3rd/pthread-win32
+#         )
+#         add_definitions(-DNOUSE_JEMALLOC)
+#     elseif(PLATFORM_LINUX)
+#         add_definitions(-DUSE_PTHREAD_LOCK)
+#         add_definitions(-DNOUSE_JEMALLOC)
+#     endif()
+#     
+#     message(STATUS "Skynet (skynet-cmake) integration enabled")
+# else()
+#     message(STATUS "Skynet (skynet-cmake) not found, skynet support disabled")
+#     set(ENABLE_SKYNET OFF)
+# endif()
+
+# Skynet integration disabled - requires API update
+set(ENABLE_SKYNET OFF)
+message(STATUS "Skynet integration temporarily disabled - requires API update")
 
 # ==========================================
 # Source Code

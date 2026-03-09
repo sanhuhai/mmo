@@ -1,12 +1,11 @@
 #pragma once
 
+#include "core/logger.h"
 #include <memory>
 #include <array>
 #include <deque>
 #include <functional>
 #include <asio.hpp>
-
-#include "core/logger.h"
 
 namespace mmo {
 

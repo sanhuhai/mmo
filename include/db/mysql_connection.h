@@ -2,15 +2,13 @@
 
 #ifdef USE_MYSQL
 
+#include "core/logger.h"
 #include <string>
 #include <vector>
 #include <memory>
 #include <functional>
 #include <mutex>
-
 #include <mysql.h>
-
-#include "core/logger.h"
 
 namespace mmo {
 

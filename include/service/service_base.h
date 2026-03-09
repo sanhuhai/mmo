@@ -1,5 +1,6 @@
 #pragma once
 
+#include "script/lua_engine.h"
 #include <string>
 #include <memory>
 #include <functional>
@@ -7,8 +8,6 @@
 #include <mutex>
 #include <atomic>
 #include <unordered_map>
-
-#include "script/lua_engine.h"
 
 namespace mmo {
 
@@ -59,6 +58,67 @@ protected:
     LuaEngine lua_engine_;
 };
 
+class DefaultService : public ServiceBase {
+public:
+    DefaultService(uint32_t id, const std::string& name) 
+        : ServiceBase(id, name) {}
+    
+    ~DefaultService() override = default;
+    
+    bool Initialize() override {
+        LOG_INFO("DefaultService '{}' initialized with id {}", GetName(), GetId());
+        return true;
+    }
+    
+    void Update(int64_t delta_ms) override {
+        ServiceMessage msg;
+        while (PopMessage(msg)) {
+            if (message_handler_) {
+                message_handler_(msg);
+            }
+        }
+    }
+    
+    void Shutdown() override {
+        LOG_INFO("DefaultService '{}' shutdown", GetName());
+    }
+};
+
+class LuaService : public ServiceBase {
+public:
+    LuaService(uint32_t id, const std::string& name) 
+        : ServiceBase(id, name) {}
+    
+    ~LuaService() override = default;
+    
+    bool Initialize() override {
+        LOG_INFO("LuaService '{}' initialized with id {}", GetName(), GetId());
+        return true;
+    }
+    
+    void Update(int64_t delta_ms) override {
+        ServiceMessage msg;
+        while (PopMessage(msg)) {
+            if (message_handler_) {
+                message_handler_(msg);
+            }
+        }
+        
+        try {
+            auto update_func = luabridge::getGlobal(lua_engine_.GetState(), "on_update");
+            if (update_func.isFunction()) {
+                update_func(delta_ms);
+            }
+        } catch (const luabridge::LuaException& e) {
+            LOG_ERROR("LuaService '{}' update error: {}", GetName(), e.what());
+        }
+    }
+    
+    void Shutdown() override {
+        LOG_INFO("LuaService '{}' shutdown", GetName());
+    }
+};
+
 class ServiceFactory {
 public:
     using Creator = std::function<ServiceBase::Ptr(uint32_t, const std::string&)>;
@@ -77,7 +137,15 @@ public:
         if (it != creators_.end()) {
             return it->second(id, name);
         }
-        return nullptr;
+        
+        /*if (type == "lua") {
+            return std::make_shared<LuaService>(id, name);
+        }*/
+        
+        return std::make_shared<LuaService>(id, name);
+
+        LOG_WARN("Service type '{}' not found, creating DefaultService", type);
+        return std::make_shared<DefaultService>(id, name);
     }
 
     bool HasType(const std::string& type) const {

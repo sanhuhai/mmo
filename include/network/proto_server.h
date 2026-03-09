@@ -1,11 +1,10 @@
 #pragma once
 
+#include "network/tcp_server.h"
+#include "network/proto_connection.h"
 #include <memory>
 #include <unordered_map>
 #include <mutex>
-
-#include "network/tcp_server.h"
-#include "network/proto_connection.h"
 
 namespace mmo {
 
