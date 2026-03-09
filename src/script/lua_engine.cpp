@@ -159,6 +159,23 @@ void LuaEngine::ReloadModule(const std::string& module_name) {
     }
 }
 
+void LuaEngine::LoadAllMoudle() {
+    std::string filename = {};
+	for (const auto& entry : std::filesystem::directory_iterator(script_path_)) {
+		// 只处理普通文件 (排除子目录)
+		if (entry.is_regular_file()) {
+			std::cout << "文件名: " << entry.path().filename().string() << std::endl;
+			// 如果需要完整路径: entry.path().string()
+            filename = entry.path().filename().string();
+            //filename.substr(0, filename.find('.'));
+            LoadModule(filename.substr(0, filename.find('.')));
+		}
+
+		// 如果想包含子目录，去掉上面的 if 判断即可
+		// else if (entry.is_directory()) { ... }
+	}
+}
+
 void LuaEngine::RegisterGlobalFunction(const std::string& name, lua_CFunction func) {
     lua_register(lua_state_, name.c_str(), func);
 }

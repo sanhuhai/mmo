@@ -94,10 +94,12 @@ int main(int argc, char* argv[]) {
 #endif
 
         lua_engine.SetScriptPath("../lua");
+        //lua_engine.LoadModule("main");
+        lua_engine.LoadAllMoudle();
 
-        if (!lua_engine.DoFile("../lua/main.lua")) {
+        /*if (!lua_engine.DoFile("../lua/main.lua")) {
             LOG_WARN("Main Lua script not found or has errors");
-        }
+        }*/
 
         if (!mmo::ServiceManager::Instance().Initialize()) {
             LOG_ERROR("Failed to initialize ServiceManager");
@@ -119,6 +121,7 @@ int main(int argc, char* argv[]) {
         LOG_INFO("Services: {}", mmo::ServiceManager::Instance().GetServiceCount());
 
         lua_engine.Call("on_server_start");
+        lua_engine.Call("load_all_players");
 
         auto start_time = std::chrono::steady_clock::now();
         auto last_update = start_time;

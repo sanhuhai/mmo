@@ -79,6 +79,7 @@ public:
 
     bool LoadModule(const std::string& module_name);
     void ReloadModule(const std::string& module_name);
+    void LoadAllMoudle();
 
     void RegisterGlobalFunction(const std::string& name, lua_CFunction func);
     
