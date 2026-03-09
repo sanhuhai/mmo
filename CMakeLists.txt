@@ -89,6 +89,7 @@ option(ENABLE_REDIS "Use Redis" ON)
 option(BUILD_LUA_FROM_SOURCE "Build Lua from source" ON)
 option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 option(ENABLE_TESTS "Build tests" OFF)
+option(BUILD_DESIGNER "Build Excel converter tool" OFF)
 
 set(LUA_VERSION "5.4" CACHE STRING "Lua version to use")
 
@@ -496,3 +497,8 @@ if(ENABLE_REDIS)
 endif()
 message(STATUS "==========================================")
 message(STATUS "")
+
+if(BUILD_DESIGNER)
+    message(STATUS "Building Excel converter tool...")
+    add_subdirectory(designer)
+endif()
