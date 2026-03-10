@@ -1,0 +1,9 @@
+task_id,type,name,description,prev_task_id,next_task_id,min_level,max_level,required_quest,conditions,rewards,time_limit,start_time,end_time,priority,sort_order,auto_accept,auto_complete,repeatable,max_repeat_count,icon,dialog_start,dialog_complete,dialog_npc,extra_params
+int32,string,string,string,int32,int32,int32,int32,int32,string,string,int32,int32,int32,int32,int32,bool,bool,bool,int32,string,string,string,string,string
+任务ID,任务类型,任务名称,任务描述,前置任务ID,后续任务ID,最低等级,最高等级,前置任务,完成条件,奖励列表,时间限制(秒),开始时间戳,结束时间戳,优先级,排序,自动接取,自动完成,可重复,最大重复次数,图标,开始对话,完成对话,NPC对话,额外参数
+4001,main,初入江湖,与村长对话,0,4002,1,0,0,"3:1001:0:1",exp:100;gold:50,0,0,0,1000,1,true,true,false,1,icon_talk,欢迎来到游戏世界!,开始你的冒险吧!,村长:年轻人,欢迎来到我们的村庄!,
+4002,main,初试身手,击杀5只史莱姆,4001,4003,1,0,4001,"1:1001:0:5",exp:200;gold:100,0,0,0,990,2,false,false,false,1,icon_kill,去消灭一些史莱姆吧!,干得不错!,村长:很好,你有成为战士的潜质!,
+4003,main,装备强化,强化装备1次,4002,4004,5,0,4002,"10:0:0:1",exp:300;item:2001:1,0,0,0,980,3,false,false,false,1,icon_upgrade,强化你的装备吧!,装备变强了!,村长:强大的装备是冒险的基础!,
+4004,main,技能学习,学习一个技能,4003,4005,10,0,4003,"11:0:0:1",exp:500;gold:200,0,0,0,970,4,false,false,false,1,icon_skill,学习技能提升战力!,技能学习成功!,村长:技能是战斗的关键!,
+4005,main,副本挑战,完成第一个副本,4004,4006,15,0,4004,"6:1001:0:1",exp:1000;diamond:20,0,0,0,960,5,false,false,false,1,icon_dungeon,挑战第一个副本!,副本通关!,村长:你已经准备好冒险了!,
+4006,main,加入公会,加入一个公会,4005,0,20,0,4005,"12:0:0:1",exp:2000;diamond:50,0,0,0,950,6,false,false,false,1,icon_guild,加入公会结交朋友!,欢迎加入公会!,村长:公会会让你的旅程更精彩!,

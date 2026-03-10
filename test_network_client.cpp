@@ -13,7 +13,12 @@
 #include <ws2tcpip.h>
 
 #pragma comment(lib, "ws2_32.lib")
+
+#ifdef _DEBUG
+#pragma comment(lib, "libprotobufd.lib")
+#else
 #pragma comment(lib, "libprotobuf.lib")
+#endif
 
 class NetworkClient {
 public:

@@ -1,0 +1,8 @@
+task_id,type,name,description,prev_task_id,next_task_id,min_level,max_level,required_quest,conditions,rewards,time_limit,start_time,end_time,priority,sort_order,auto_accept,auto_complete,repeatable,max_repeat_count,icon,dialog_start,dialog_complete,dialog_npc,extra_params
+int32,string,string,string,int32,int32,int32,int32,int32,string,string,int32,int32,int32,int32,int32,bool,bool,bool,int32,string,string,string,string,string
+任务ID,任务类型,任务名称,任务描述,前置任务ID,后续任务ID,最低等级,最高等级,前置任务,完成条件,奖励列表,时间限制(秒),开始时间戳,结束时间戳,优先级,排序,自动接取,自动完成,可重复,最大重复次数,图标,开始对话,完成对话,NPC对话,额外参数
+5001,side,收集材料,收集10个木材,0,0,5,0,0,"2:1001:0:10",gold:100,0,0,0,100,1,false,false,true,3,icon_collect,帮我收集一些木材,太感谢了!,村民:我需要一些木材,
+5002,side,清理怪物,击杀20只野狼,0,0,10,0,0,"1:1002:0:20",exp:500;gold:50,0,0,0,90,2,false,false,true,2,icon_kill,野狼太危险了!,村庄安全了!,猎人:请帮我清理野狼,
+5003,side,寻找宝藏,到达指定地点,0,0,15,0,0,"5:1001:1002:1",gold:500;item:2003:1,0,0,0,80,3,false,false,true,1,icon_explore,寻找隐藏的宝藏!,找到宝藏了!,探险家:听说那里有宝藏,
+5004,side,竞技挑战,获得3场PVP胜利,0,0,20,0,0,"7:0:0:3",diamond:10,0,0,0,70,4,false,false,true,1,icon_pvp,来竞技场挑战吧!,竞技高手!,竞技场管理员:来挑战吧!,
+5005,side,交易任务,完成5次交易,0,0,10,0,0,"15:0:0:5",gold:200,0,0,0,60,5,false,false,true,1,icon_trade,帮我完成一些交易,交易完成!,商人:需要你帮忙交易,

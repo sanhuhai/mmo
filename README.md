@@ -9,7 +9,9 @@
 - **Skynet风格服务**: 服务隔离、消息传递的微服务架构
 - **Redis缓存系统**: 双层缓存架构，支持定时同步到数据库
 - **MySQL数据库**: 连接池管理，支持玩家数据持久化
+- **任务系统**: 支持多种任务类型（每日/每周/每月/赛季/主线/支线/成就/活动/引导）
 - **Protobuf协议**: 高效的二进制序列化，支持Lua端使用
+- **Excel转译工具**: 将Excel/CSV配置表转换为SQLite数据库
 - **灵活配置**: INI格式配置文件
 - **日志系统**: 支持spdlog高性能日志
 - **跨平台**: 支持Windows/Linux/macOS
@@ -28,6 +30,7 @@ mmo/
 │   ├── proto/           # 协议模块 (Protobuf编解码)
 │   ├── script/          # 脚本引擎 (Lua引擎、注册绑定)
 │   ├── service/         # 服务模块 (服务基类、网关、游戏服务)
+│   ├── task/            # 任务系统 (任务管理、奖励发放)
 │   └── utils/           # 工具类 (线程池、定时器、缓冲区)
 ├── src/                  # 源代码
 │   ├── cache/
@@ -38,8 +41,20 @@ mmo/
 │   ├── proto/
 │   ├── script/
 │   ├── service/
+│   ├── task/
 │   ├── utils/
 │   └── main.cpp
+├── designer/             # 配置表转译工具
+│   ├── excel/           # Excel/CSV配置表
+│   │   ├── daily_task.csv    # 每日任务配置
+│   │   ├── weekly_task.csv   # 每周任务配置
+│   │   ├── monthly_task.csv  # 每月任务配置
+│   │   ├── main_task.csv     # 主线任务配置
+│   │   ├── side_task.csv     # 支线任务配置
+│   │   └── achievement.csv   # 成就配置
+│   ├── output/          # 输出目录 (SQLite数据库)
+│   ├── include/         # 转译工具头文件
+│   └── src/             # 转译工具源代码
 ├── lua/                  # Lua脚本
 │   ├── main.lua         # 主入口脚本
 │   ├── service/         # 服务脚本
@@ -250,6 +265,177 @@ cache.PrintStats();
 | LRU淘汰 | 自动清理最少使用的缓存 |
 | TTL支持 | 支持设置过期时间 |
 | 脏标记 | 跟踪修改，只同步变更数据 |
+
+## 任务系统
+
+### 任务类型
+
+| 类型 | 说明 | 重置周期 |
+|------|------|----------|
+| Daily | 每日任务 | 每日0点重置 |
+| Weekly | 每周任务 | 每周一0点重置 |
+| Monthly | 每月任务 | 每月1日0点重置 |
+| Season | 赛季任务 | 赛季结束重置 |
+| MainQuest | 主线任务 | 不可重置 |
+| SideQuest | 支线任务 | 可配置重复 |
+| Achievement | 成就 | 不可重置 |
+| Event | 活动任务 | 活动结束失效 |
+| Guide | 引导任务 | 不可重置 |
+
+### 任务条件类型
+
+| 条件类型 | 说明 | 参数 |
+|----------|------|------|
+| KILL_MONSTER | 击杀怪物 | param1:怪物ID, param2:0, target:数量 |
+| COLLECT_ITEM | 收集物品 | param1:物品ID, param2:0, target:数量 |
+| TALK_TO_NPC | 与NPC对话 | param1:NPC ID, param2:0, target:1 |
+| REACH_LEVEL | 达到等级 | param1:0, param2:0, target:等级 |
+| REACH_LOCATION | 到达地点 | param1:地图ID, param2:坐标, target:1 |
+| COMPLETE_DUNGEON | 完成副本 | param1:副本ID, param2:0, target:次数 |
+| WIN_PVP | PVP胜利 | param1:0, param2:0, target:次数 |
+| LOGIN_DAYS | 登录天数 | param1:0, param2:0, target:天数 |
+| CONSUME_ITEM | 消耗物品 | param1:物品ID, param2:0, target:数量 |
+| UPGRADE_EQUIPMENT | 强化装备 | param1:0, param2:0, target:次数 |
+| LEARN_SKILL | 学习技能 | param1:技能ID, param2:0, target:1 |
+| JOIN_GUILD | 加入公会 | param1:0, param2:0, target:1 |
+| ADD_FRIEND | 添加好友 | param1:0, param2:0, target:数量 |
+| CHAT_MESSAGE | 发送消息 | param1:0, param2:0, target:次数 |
+| TRADE | 交易次数 | param1:0, param2:0, target:次数 |
+| SPEND_GOLD | 消费金币 | param1:0, param2:0, target:数量 |
+| SPEND_DIAMOND | 消费钻石 | param1:0, param2:0, target:数量 |
+| RECHARGE | 充值 | param1:0, param2:0, target:金额 |
+| SHARE | 分享 | param1:0, param2:0, target:次数 |
+| INVITE_FRIEND | 邀请好友 | param1:0, param2:0, target:人数 |
+| CUSTOM | 自定义 | custom_param:自定义参数 |
+
+### 使用示例
+
+```cpp
+// 初始化任务系统
+mmo::task::TaskManager task_manager;
+mmo::task::DefaultRewardHandler reward_handler;
+mmo::task::TaskDBStorage storage("data/player_tasks.db");
+
+// 设置奖励回调
+reward_handler.SetGoldCallback([](uint64_t player_id, int32_t amount) {
+    // 发放金币逻辑
+    return true;
+});
+reward_handler.SetItemCallback([](uint64_t player_id, int32_t item_id, int32_t count) {
+    // 发放物品逻辑
+    return true;
+});
+
+task_manager.Initialize(&reward_handler, &storage);
+
+// 加载任务配置
+mmo::task::TaskDBLoader loader;
+loader.Open("designer/output/game_data.db");
+std::map<int32_t, mmo::task::TaskConfig> configs;
+loader.LoadAllTasks(configs);
+task_manager.LoadTaskConfigs(configs);
+
+// 加载玩家任务数据
+task_manager.LoadPlayerData(player_id);
+
+// 玩家接取任务
+task_manager.AcceptTask(player_id, 1001);  // 每日登录任务
+
+// 触发事件更新进度
+task_manager.OnEvent(player_id, 
+    mmo::task::TaskConditionType::LOGIN_DAYS, 0, 0, 1);
+
+// 击杀怪物事件
+task_manager.OnEvent(player_id,
+    mmo::task::TaskConditionType::KILL_MONSTER, 1001, 0, 1);  // 击杀ID=1001的怪物
+
+// 完成任务并领取奖励
+if (task_manager.IsTaskCompleted(player_id, 1001)) {
+    task_manager.ClaimReward(player_id, 1001);
+}
+
+// 获取玩家任务列表
+auto in_progress = task_manager.GetInProgressTasks(player_id);
+auto claimable = task_manager.GetClaimableTasks(player_id);
+
+// 定时重置
+task_manager.OnDailyReset();   // 每日重置
+task_manager.OnWeeklyReset();  // 每周重置
+```
+
+### 任务配置表格式
+
+CSV配置表字段说明：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| task_id | int32 | 任务ID |
+| type | string | 任务类型 (daily/weekly/monthly/season/main/side/achievement/event/guide) |
+| name | string | 任务名称 |
+| description | string | 任务描述 |
+| prev_task_id | int32 | 前置任务ID |
+| next_task_id | int32 | 后续任务ID |
+| min_level | int32 | 最低等级要求 |
+| max_level | int32 | 最高等级限制 |
+| required_quest | int32 | 前置任务要求 |
+| conditions | string | 完成条件 (格式: type:param1:param2:target;...) |
+| rewards | string | 奖励列表 (格式: gold:100;exp:500;item:2001:1;...) |
+| time_limit | int32 | 时间限制(秒) |
+| start_time | int32 | 开始时间戳 |
+| end_time | int32 | 结束时间戳 |
+| priority | int32 | 优先级 |
+| sort_order | int32 | 排序 |
+| auto_accept | bool | 自动接取 |
+| auto_complete | bool | 自动完成 |
+| repeatable | bool | 可重复 |
+| max_repeat_count | int32 | 最大重复次数 |
+| icon | string | 图标 |
+| dialog_start | string | 开始对话 |
+| dialog_complete | string | 完成对话 |
+| dialog_npc | string | NPC对话 |
+| extra_params | string | 额外参数 (格式: key1=value1;key2=value2) |
+
+## Excel配置表转译工具
+
+### 功能说明
+
+将Excel/CSV配置表转换为SQLite数据库，支持：
+
+- CSV格式读取
+- 多种数据类型自动识别
+- 二进制数据序列化
+- SQLite数据库存储
+
+### 编译转译工具
+
+```powershell
+# 启用转译工具构建
+cmake -B build -S . -DBUILD_DESIGNER=ON
+
+# 构建
+cmake --build build --config Release --target excel_converter
+```
+
+### 使用方法
+
+```powershell
+# 转换单个文件
+excel_converter.exe -i input.csv -o output.db
+
+# 转换整个目录
+excel_converter.exe -d excel/ -o output/game_data.db
+
+# 查看帮助
+excel_converter.exe -h
+```
+
+### 输出格式
+
+转换后的SQLite数据库表结构：
+
+- 表名：CSV文件名（不含扩展名）
+- 字段：CSV列名
+- 类型：自动推断（INTEGER/REAL/TEXT/BLOB）
 
 ## Lua脚本开发
 
@@ -484,6 +670,51 @@ build\bin\Release\test_network_client.exe
 | `CallModuleWithReturn<T>(module, method, ...)` | 调用并返回值 |
 | `DoFile(path)` | 执行脚本文件 |
 | `Shutdown()` | 关闭引擎 |
+
+### TaskManager API
+
+| 方法 | 说明 |
+|------|------|
+| `Initialize(reward_handler, storage)` | 初始化任务管理器 |
+| `LoadTaskConfigs(configs)` | 加载任务配置 |
+| `AcceptTask(player_id, task_id)` | 接取任务 |
+| `CompleteTask(player_id, task_id)` | 完成任务 |
+| `ClaimReward(player_id, task_id)` | 领取奖励 |
+| `AbandonTask(player_id, task_id)` | 放弃任务 |
+| `OnEvent(player_id, type, param1, param2, count)` | 触发事件 |
+| `GetTask(player_id, task_id)` | 获取任务 |
+| `GetPlayerTasks(player_id)` | 获取玩家所有任务 |
+| `GetPlayerTasksByType(player_id, type)` | 按类型获取任务 |
+| `GetPlayerTasksByStatus(player_id, status)` | 按状态获取任务 |
+| `GetAvailableTasks(player_id)` | 获取可接取任务 |
+| `GetInProgressTasks(player_id)` | 获取进行中任务 |
+| `GetCompletedTasks(player_id)` | 获取已完成任务 |
+| `GetClaimableTasks(player_id, task_id)` | 获取可领取奖励任务 |
+| `HasTask(player_id, task_id)` | 检查是否拥有任务 |
+| `IsTaskCompleted(player_id, task_id)` | 检查任务是否完成 |
+| `IsTaskClaimed(player_id, task_id)` | 检查奖励是否已领取 |
+| `OnDailyReset()` | 每日重置 |
+| `OnWeeklyReset()` | 每周重置 |
+| `OnMonthlyReset()` | 每月重置 |
+| `OnSeasonReset()` | 赛季重置 |
+| `UpdatePlayerLevel(player_id, level)` | 更新玩家等级 |
+| `LoadPlayerData(player_id)` | 加载玩家任务数据 |
+| `SavePlayerData(player_id)` | 保存玩家任务数据 |
+| `ClearPlayerData(player_id)` | 清除玩家任务数据 |
+
+### TaskDBLoader API
+
+| 方法 | 说明 |
+|------|------|
+| `Open(db_path)` | 打开数据库 |
+| `Close()` | 关闭数据库 |
+| `LoadAllTasks(configs)` | 加载所有任务配置 |
+| `LoadTasksByType(type, configs)` | 按类型加载任务 |
+| `LoadTasksFromTable(table_name, configs)` | 从指定表加载 |
+| `LoadPlayerTasks(player_id, tasks)` | 加载玩家任务 |
+| `SavePlayerTask(player_id, task)` | 保存玩家任务 |
+| `GetTableNames()` | 获取所有表名 |
+| `TableExists(table_name)` | 检查表是否存在 |
 
 ## License
 

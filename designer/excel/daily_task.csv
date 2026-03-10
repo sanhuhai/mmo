@@ -1,0 +1,8 @@
+task_id,type,name,description,prev_task_id,next_task_id,min_level,max_level,required_quest,conditions,rewards,time_limit,start_time,end_time,priority,sort_order,auto_accept,auto_complete,repeatable,max_repeat_count,icon,dialog_start,dialog_complete,dialog_npc,extra_params
+int32,string,string,string,int32,int32,int32,int32,int32,string,string,int32,int32,int32,int32,int32,bool,bool,bool,int32,string,string,string,string,string
+任务ID,任务类型,任务名称,任务描述,前置任务ID,后续任务ID,最低等级,最高等级,前置任务,完成条件,奖励列表,时间限制(秒),开始时间戳,结束时间戳,优先级,排序,自动接取,自动完成,可重复,最大重复次数,图标,开始对话,完成对话,NPC对话,额外参数
+1001,daily,每日登录,每日登录游戏一次,0,0,1,0,0,"8:0:0:1",gold:100,0,0,0,100,1,true,true,true,1,icon_login,欢迎回来!,感谢您的登录!,,
+1002,daily,每日击杀,击杀10只怪物,0,0,1,0,0,"1:0:0:10",exp:500;gold:50,0,0,0,90,2,false,false,true,1,icon_kill,去消灭一些怪物吧!,干得漂亮!,,
+1003,daily,每日副本,完成3次副本,0,0,10,0,0,"6:0:0:3",diamond:10,0,0,0,80,3,false,false,true,1,icon_dungeon,挑战副本获取奖励!,副本完成!,,
+1004,daily,每日消费,消费100金币,0,0,1,0,0,"16:0:0:100",exp:200,0,0,0,70,4,false,false,true,1,icon_spend,消费也是一种贡献!,感谢消费!,,
+1005,daily,每日分享,分享游戏1次,0,0,1,0,0,"19:0:0:1",diamond:5,0,0,0,60,5,false,false,true,1,icon_share,分享给好友吧!,分享成功!,,

@@ -24,8 +24,10 @@ target_include_directories(proto_module
 # Link against protobuf
 target_link_libraries(proto_module
     PRIVATE
-        ${Protobuf_LIBRARIES}
+        libprotobuf
 )
+
+add_dependencies(proto_module libprotobuf)
 
 # Add Lua binding file
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/proto_lua.cpp")

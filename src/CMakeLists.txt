@@ -64,6 +64,35 @@ if(ENABLE_REDIS)
     )
 endif()
 
+set(TASK_SOURCES
+    task/task_base.cpp
+    task/task_manager.cpp
+    task/task_db_loader.cpp
+    task/task_reward.cpp
+)
+
+set(REWARD_SOURCES
+    reward/reward_types.cpp
+    reward/reward_loader.cpp
+    reward/reward_giver.cpp
+)
+
+set(SQLITE3_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/designer/third_party/sqlite3")
+set(SQLITE3_SOURCE "${CMAKE_SOURCE_DIR}/designer/third_party/sqlite3/sqlite3.c")
+
+if(EXISTS "${SQLITE3_INCLUDE_DIR}/sqlite3.h")
+    if(NOT TARGET sqlite3_static)
+        add_library(sqlite3_static STATIC "${SQLITE3_SOURCE}")
+        target_include_directories(sqlite3_static PUBLIC ${SQLITE3_INCLUDE_DIR})
+    endif()
+    set(SQLITE3_FOUND TRUE)
+    include_directories(${SQLITE3_INCLUDE_DIR})
+    message(STATUS "Using SQLite3 for task system: ${SQLITE3_INCLUDE_DIR}")
+else()
+    set(SQLITE3_FOUND FALSE)
+    message(STATUS "SQLite3 not found, task database storage will be disabled")
+endif()
+
 set(PROTO_SOURCES)
 if(ENABLE_PROTOBUF)
     list(APPEND PROTO_SOURCES
@@ -82,6 +111,8 @@ set(ALL_SOURCES
     ${UTILS_SOURCES}
     ${DB_SOURCES}
     ${CACHE_SOURCES}
+    ${TASK_SOURCES}
+    ${REWARD_SOURCES}
     ${PROTO_SOURCES}
     ${JSON_SOURCES}
 )
@@ -133,6 +164,11 @@ if(ENABLE_RAPIDJSON)
     target_compile_definitions(mmo_core PUBLIC USE_RAPIDJSON)
 endif()
 
+if(SQLITE3_FOUND)
+    target_link_libraries(mmo_core PUBLIC sqlite3_static)
+    target_compile_definitions(mmo_core PUBLIC USE_SQLITE3)
+endif()
+
 if(ENABLE_SKYNET)
     target_link_libraries(mmo_core PUBLIC 
         skynet_core
@@ -150,15 +186,20 @@ set_target_properties(mmo_server PROPERTIES
 )
 
 add_executable(test_network_client ../test_network_client.cpp)
+
 target_link_libraries(test_network_client PRIVATE 
     ws2_32
-    ${Protobuf_LIBRARIES}
     proto_module
+    $<TARGET_FILE:libprotobuf>
 )
+
+add_dependencies(test_network_client proto_module libprotobuf)
+
 target_include_directories(test_network_client PRIVATE
     ${PROTO_DIR}
     ${Protobuf_INCLUDE_DIRS}
 )
+
 set_target_properties(test_network_client PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
