@@ -7,6 +7,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <thread>
+#include <set>
 
 namespace mmo {
 

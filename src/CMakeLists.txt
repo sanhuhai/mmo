@@ -1,15 +1,18 @@
+# Sources
 set(CORE_SOURCES
-    core/logger.cpp
-    core/config.cpp
     core/application.cpp
+    core/config.cpp
+    core/logger.cpp
 )
 
 set(NETWORK_SOURCES
+    network/tcp_server.cpp
     network/connection.cpp
     network/connection_manager.cpp
-    network/tcp_server.cpp
     network/network_processor.cpp
     network/network_server.cpp
+    network/proto_connection.cpp
+    network/proto_server.cpp
 )
 
 set(SCRIPT_SOURCES
@@ -28,8 +31,14 @@ set(ITEM_SOURCES
 )
 
 set(CHARACTER_SOURCES
-    role/character_manager.cpp
-    role/character_lua_binding.cpp
+    character/character.cpp
+    character/character_manager.cpp
+    character/character_lua_binding.cpp
+)
+
+set(PLAYER_SOURCES
+    player/player_manager.cpp
+    player/weapon.cpp
 )
 
 set(SERVICE_SOURCES
@@ -45,8 +54,10 @@ if(ENABLE_SKYNET)
 endif()
 
 set(UTILS_SOURCES
+    utils/timer.cpp
     utils/thread_pool.cpp
     utils/buffer.cpp
+    utils/json_utils.cpp
 )
 
 set(JSON_SOURCES)
@@ -80,16 +91,16 @@ if(ENABLE_REDIS)
 endif()
 
 set(TASK_SOURCES
-    task/task_base.cpp
     task/task_manager.cpp
+    task/task_base.cpp
     task/task_db_loader.cpp
     task/task_reward.cpp
 )
 
 set(REWARD_SOURCES
-    reward/reward_types.cpp
     reward/reward_loader.cpp
     reward/reward_giver.cpp
+    reward/reward_types.cpp
 )
 
 set(SQLITE3_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/designer/third_party/sqlite3")
@@ -197,7 +208,7 @@ if(ENABLE_SKYNET)
 endif()
 
 add_executable(mmo_server main.cpp)
-target_link_libraries(mmo_server PRIVATE mmo_core)
+target_link_libraries(mmo_server mmo_core)
 
 set_target_properties(mmo_server PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin

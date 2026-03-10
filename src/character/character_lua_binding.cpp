@@ -1,9 +1,9 @@
-#include "role/character_lua_binding.h"
+#include "character/character_lua_binding.h"
 #include "script/lua_engine.h"
-#include "role/character_manager.h"
+#include "character/character_manager.h"
 
 namespace mmo {
-namespace role {
+namespace character {
 
 void CharacterLuaBinding::Register(LuaEngine& engine) {
     RegisterCharacterClassConstants(engine);
@@ -73,5 +73,5 @@ void CharacterLuaBinding::RegisterCharacterManager(LuaEngine& engine) {
         .endNamespace();
 }
 
-} // namespace role
+} // namespace character
 } // namespace mmo

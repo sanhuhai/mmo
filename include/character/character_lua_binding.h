@@ -1,10 +1,9 @@
 #pragma once
 
 #include "script/lua_engine.h"
-#include "role/character_manager.h"
 
 namespace mmo {
-namespace role {
+namespace character {
 
 // Lua binding class
 class CharacterLuaBinding {
@@ -17,5 +16,5 @@ private:
     static void RegisterCharacterManager(LuaEngine& engine);
 };
 
-} // namespace role
+} // namespace character
 } // namespace mmo

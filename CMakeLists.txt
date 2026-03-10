@@ -111,6 +111,21 @@ include_directories(${THIRD_PARTY_DIR})
 find_package(Threads REQUIRED)
 
 # ==========================================
+# SQLite3
+# ==========================================
+set(SQLITE3_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/designer/third_party/sqlite3")
+set(SQLITE3_LIBRARY "${SQLITE3_INCLUDE_DIR}/sqlite3.c")
+
+if(EXISTS "${SQLITE3_INCLUDE_DIR}/sqlite3.h")
+    message(STATUS "Found SQLite3: ${SQLITE3_INCLUDE_DIR}")
+    include_directories(${SQLITE3_INCLUDE_DIR})
+    add_definitions(-DUSE_SQLITE3)
+else()
+    message(STATUS "SQLite3 not found, reward and task systems will be disabled")
+    set(ENABLE_SQLITE3 OFF)
+endif()
+
+# ==========================================
 # Third Party Libraries (Header-only)
 # ==========================================
 
@@ -273,6 +288,7 @@ if(ENABLE_MYSQL)
             set(MySQL_INCLUDE_DIRS ${MySQL_INCLUDE_DIR})
             set(MySQL_LIBRARIES ${MySQL_LIBRARY})
             include_directories(${MySQL_INCLUDE_DIRS})
+            add_definitions(-DUSE_MYSQL)
             message(STATUS "Found MySQL: ${MySQL_LIBRARIES}")
         else()
             message(STATUS "MySQL not found, database support disabled")
