@@ -22,6 +22,11 @@ set(CHAT_SOURCES
     chat/chat_lua_binding.cpp
 )
 
+set(ITEM_SOURCES
+    item/item_manager.cpp
+    item/item_lua_binding.cpp
+)
+
 set(SERVICE_SOURCES
     service/service_base.cpp
     service/gate_service.cpp
@@ -113,6 +118,7 @@ set(ALL_SOURCES
     ${NETWORK_SOURCES}
     ${SCRIPT_SOURCES}
     ${CHAT_SOURCES}
+    ${ITEM_SOURCES}
     ${SERVICE_SOURCES}
     ${UTILS_SOURCES}
     ${DB_SOURCES}

@@ -7,6 +7,7 @@
 #include "network/tcp_server.h"
 #include "service/service_base.h"
 #include "chat/chat_lua_binding.h"
+#include "item/item_lua_binding.h"
 
 #ifdef USE_PROTOBUF
 #include "proto/message_codec.h"
@@ -23,6 +24,7 @@ public:
         RegisterNetwork(engine);
         RegisterUtils(engine);
         RegisterChat(engine);
+        RegisterItem(engine);
 #ifdef USE_PROTOBUF
         RegisterProtobuf(engine);
 #endif
@@ -90,6 +92,10 @@ public:
 
     static void RegisterChat(LuaEngine& engine) {
         chat::ChatLuaBinding::Register(engine);
+    }
+
+    static void RegisterItem(LuaEngine& engine) {
+        item::ItemLuaBinding::Register(engine);
     }
 
 #ifdef USE_PROTOBUF
