@@ -27,6 +27,11 @@ set(ITEM_SOURCES
     item/item_lua_binding.cpp
 )
 
+set(CHARACTER_SOURCES
+    role/character_manager.cpp
+    role/character_lua_binding.cpp
+)
+
 set(SERVICE_SOURCES
     service/service_base.cpp
     service/gate_service.cpp
@@ -119,6 +124,7 @@ set(ALL_SOURCES
     ${SCRIPT_SOURCES}
     ${CHAT_SOURCES}
     ${ITEM_SOURCES}
+    ${CHARACTER_SOURCES}
     ${SERVICE_SOURCES}
     ${UTILS_SOURCES}
     ${DB_SOURCES}

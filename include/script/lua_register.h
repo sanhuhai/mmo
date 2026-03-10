@@ -8,6 +8,7 @@
 #include "service/service_base.h"
 #include "chat/chat_lua_binding.h"
 #include "item/item_lua_binding.h"
+#include "role/character_lua_binding.h"
 
 #ifdef USE_PROTOBUF
 #include "proto/message_codec.h"
@@ -25,6 +26,7 @@ public:
         RegisterUtils(engine);
         RegisterChat(engine);
         RegisterItem(engine);
+        RegisterCharacter(engine);
 #ifdef USE_PROTOBUF
         RegisterProtobuf(engine);
 #endif
@@ -96,6 +98,10 @@ public:
 
     static void RegisterItem(LuaEngine& engine) {
         item::ItemLuaBinding::Register(engine);
+    }
+
+    static void RegisterCharacter(LuaEngine& engine) {
+        role::CharacterLuaBinding::Register(engine);
     }
 
 #ifdef USE_PROTOBUF
