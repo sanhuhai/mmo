@@ -17,6 +17,11 @@ set(SCRIPT_SOURCES
     script/lua_register.cpp
 )
 
+set(CHAT_SOURCES
+    chat/chat_manager.cpp
+    chat/chat_lua_binding.cpp
+)
+
 set(SERVICE_SOURCES
     service/service_base.cpp
     service/gate_service.cpp
@@ -107,6 +112,7 @@ set(ALL_SOURCES
     ${CORE_SOURCES}
     ${NETWORK_SOURCES}
     ${SCRIPT_SOURCES}
+    ${CHAT_SOURCES}
     ${SERVICE_SOURCES}
     ${UTILS_SOURCES}
     ${DB_SOURCES}
